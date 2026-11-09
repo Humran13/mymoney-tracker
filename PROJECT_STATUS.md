@@ -151,8 +151,15 @@ permissions and the reverse-proxy configuration.
 
 ## GitHub publication
 
-See the final report in this session's conversation for the actual
-repository URL, visibility, branch, commit hash, and CI status at time of
-publication — this file is updated at the next meaningful checkpoint after
-that to include it here too, per the "don't restate things repeatedly"
-token-efficiency rule for this phase.
+- **Repository:** https://github.com/Humran13/mymoney-tracker
+- **Visibility:** Public
+- **Branch:** `master`
+- **Commit:** `c3ba02a6733fb8781a5b5d38ff6ff563b7d2f6bb` ("Phase 9: finish goal
+  scenarios, fix mobile UX, harden security, add CI/E2E, prep CloudPanel
+  deploy")
+- **CI status:** All 5 jobs passed on GitHub's own infrastructure
+  (run `42674587796`): `dependency-audit`, `lint`, `test` (3m13s — full
+  suite against a real PostgreSQL service container), `docker-build`,
+  `frontend-build`.
+- **Secret scan:** `gitleaks` against the full 2-commit history — 0 leaks —
+  run immediately before this push.
