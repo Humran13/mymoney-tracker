@@ -1,0 +1,14 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Delete transfer · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Delete this transfer?</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 p-6 max-w-lg">
+  <p class="text-sm mb-4">{{ transfer.amount|money }} from {{ transfer.from_account.name }} to {{ transfer.to_account.name }} on {{ transfer.occurred_on }}. Both account balances will be recalculated.</p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg px-5 py-2.5">Delete transfer</button>
+    <a href="{% url 'accounts:transfer_list' %}" class="ml-3 text-sm text-slate-500">Cancel</a>
+  </form>
+</div>
+{% endblock %}

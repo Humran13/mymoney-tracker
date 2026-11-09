@@ -1,0 +1,39 @@
+{% extends "base/base.html" %}
+{% block title %}Audit Log · Admin · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Audit Log</h1>
+{% include "adminpanel/_nav.html" %}
+<form method="get" class="mb-4">
+  <select name="action" title="Filter by action" onchange="this.form.submit()" class="!w-auto">
+    <option value="">All actions</option>
+    {% for value, label in actions %}
+    <option value="{{ value }}" {% if value == action %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+</form>
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-left text-slate-500 border-b border-slate-200 dark:border-slate-700">
+      <tr><th class="p-3">When</th><th class="p-3">Action</th><th class="p-3">Actor</th><th class="p-3">Affected user</th><th class="p-3">Description</th></tr>
+    </thead>
+    <tbody>
+      {% for e in page %}
+      <tr class="border-b border-slate-100 dark:border-slate-700/50">
+        <td class="p-3 whitespace-nowrap">{{ e.created_at|date:"d M Y H:i" }}</td>
+        <td class="p-3">{{ e.get_action_display }}</td>
+        <td class="p-3">{{ e.actor.email|default:"—" }}</td>
+        <td class="p-3">{{ e.affected_user.email|default:"—" }}</td>
+        <td class="p-3">{{ e.description }}</td>
+      </tr>
+      {% empty %}<tr><td class="p-6 text-slate-500" colspan="5">No events.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if page.has_other_pages %}
+<div class="flex gap-2 mt-4 text-sm">
+  {% if page.has_previous %}<a href="?action={{ action }}&page={{ page.previous_page_number }}" class="px-3 py-1 border rounded">Prev</a>{% endif %}
+  <span class="px-3 py-1">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a href="?action={{ action }}&page={{ page.next_page_number }}" class="px-3 py-1 border rounded">Next</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

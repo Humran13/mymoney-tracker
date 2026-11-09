@@ -1,0 +1,61 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Monthly Report · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+  <h1 class="text-xl font-semibold">Monthly Report — {{ report.start|date:"F Y" }}</h1>
+  <form method="get" class="flex gap-2 items-center text-sm">
+    <input type="number" name="year" value="{{ report.year }}" title="Year" placeholder="Year" class="!w-24" min="2000" max="2100">
+    <input type="number" name="month" value="{{ report.month }}" title="Month" placeholder="Month" class="!w-20" min="1" max="12">
+    <button type="submit" class="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700">Go</button>
+    <a href="{% url 'reports:monthly_csv' %}?year={{ report.year }}&month={{ report.month }}" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600">CSV</a>
+    <a href="{% url 'reports:monthly_pdf' %}?year={{ report.year }}&month={{ report.month }}" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600">PDF</a>
+  </form>
+</div>
+
+<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="bg-green-50 border border-green-200 rounded-xl p-4"><p class="text-xs text-green-700">Income</p><p class="text-xl font-bold text-green-700">{{ report.total_income|money }}</p></div>
+  <div class="bg-red-50 border border-red-200 rounded-xl p-4"><p class="text-xs text-red-700">Expenses</p><p class="text-xl font-bold text-red-700">{{ report.total_expenses|money }}</p></div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Net</p><p class="text-xl font-bold">{{ report.net|money }}</p></div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Mobile Money Fees</p><p class="text-xl font-bold">{{ report.mobile_money_fees|money }}</p></div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Balances</h2>
+    <div class="flex justify-between text-sm py-1"><span>Opening balance</span><span>{{ report.opening_balance|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Closing balance</span><span>{{ report.closing_balance|money }}</span></div>
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Debts &amp; Loans</h2>
+    <div class="flex justify-between text-sm py-1"><span>Opening outstanding debts</span><span>{{ report.opening_outstanding_debts|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>New borrowing</span><span>{{ report.money_borrowed|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Repayments paid</span><span>{{ report.loan_repayments_paid|money }}</span></div>
+    <div class="flex justify-between text-sm py-1 font-medium border-t border-slate-100 dark:border-slate-700/50 mt-1"><span>Closing outstanding debts</span><span>{{ report.closing_outstanding_debts|money }}</span></div>
+    <div class="flex justify-between text-sm py-1 mt-2"><span>Opening outstanding receivables</span><span>{{ report.opening_outstanding_receivables|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>New lending</span><span>{{ report.money_lent|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Repayments received</span><span>{{ report.loan_repayments_received|money }}</span></div>
+    <div class="flex justify-between text-sm py-1 font-medium border-t border-slate-100 dark:border-slate-700/50 mt-1"><span>Closing outstanding receivables</span><span>{{ report.closing_outstanding_receivables|money }}</span></div>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Spending by category</h2>
+    {% for row in report.spending_by_category %}
+    <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+      <span>{{ row.category__name|default:"Uncategorized" }}</span><span>{{ row.total|money }}</span>
+    </div>
+    {% empty %}<p class="text-sm text-slate-500">No expenses recorded this month.</p>{% endfor %}
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Budget performance</h2>
+    {% for b in report.budgets %}
+    <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+      <span>{{ b.category.name }}</span><span>{{ b.spent|money }} / {{ b.amount|money }}</span>
+    </div>
+    {% empty %}<p class="text-sm text-slate-500">No budgets set for this month.</p>{% endfor %}
+    <div class="flex justify-between text-sm py-1 mt-2 font-medium"><span>Savings contributions</span><span>{{ report.savings_contributions|money }}</span></div>
+  </div>
+</div>
+{% endblock %}

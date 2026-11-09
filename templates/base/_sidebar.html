@@ -1,0 +1,24 @@
+{% load static %}
+<aside class="hidden md:flex md:flex-col w-60 shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700">
+  <div class="h-16 flex items-center gap-2 px-5 border-b border-slate-200 dark:border-slate-700">
+    <span class="text-brand-600 dark:text-brand-500 text-xl font-bold">MyMoney</span>
+    <span class="text-xs text-slate-400">Tracker</span>
+  </div>
+  <nav class="flex-1 overflow-y-auto py-4 px-2 space-y-1 text-sm">
+    <a href="{% url 'dashboard:home' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Dashboard</a>
+    <a href="{% url 'accounts:list' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Accounts</a>
+    <a href="{% url 'transactions:list' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Transactions</a>
+    <a href="{% url 'debts:dashboard' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Debts &amp; Loans</a>
+    <a href="{% url 'bills:list' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Recurring Bills</a>
+    <a href="{% url 'closing:today' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Daily Closing</a>
+    <a href="{% url 'budgets:list' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Budgets</a>
+    <a href="{% url 'goals:list' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Goals</a>
+    <a href="{% url 'reports:monthly' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Reports</a>
+    <div class="pt-3 mt-3 border-t border-slate-200 dark:border-slate-700">
+      <a href="{% url 'users:settings' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Settings</a>
+      {% if user.is_staff %}
+      <a href="{% url 'adminpanel:dashboard' %}" class="block px-3 py-2 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700">Admin Panel</a>
+      {% endif %}
+    </div>
+  </nav>
+</aside>

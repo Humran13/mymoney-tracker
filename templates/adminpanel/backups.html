@@ -1,0 +1,16 @@
+{% extends "base/base.html" %}
+{% block title %}Backups · Admin · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Database Backups</h1>
+{% include "adminpanel/_nav.html" %}
+<form method="post" action="{% url 'adminpanel:backups_trigger' %}" class="mb-4">
+  {% csrf_token %}
+  <button type="submit" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">Create backup now</button>
+</form>
+<p class="text-xs text-slate-500 mb-4">Restoring a backup must be run from the server CLI (<code>python manage.py restore_db &lt;filename&gt;</code>) — it is never exposed over the web, since it replaces the entire database.</p>
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-700/50">
+  {% for f in files %}
+  <div class="flex justify-between p-3 text-sm"><span>{{ f.name }}</span></div>
+  {% empty %}<p class="p-6 text-slate-500 text-sm">No backups yet.</p>{% endfor %}
+</div>
+{% endblock %}

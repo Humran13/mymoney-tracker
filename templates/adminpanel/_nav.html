@@ -1,0 +1,9 @@
+<div class="flex gap-4 text-sm border-b border-slate-200 dark:border-slate-700 mb-4 overflow-x-auto">
+  <a href="{% url 'adminpanel:dashboard' %}" class="py-2 border-b-2 border-transparent hover:border-brand-600">Overview</a>
+  <a href="{% url 'adminpanel:user_list' %}" class="py-2 border-b-2 border-transparent hover:border-brand-600">Users</a>
+  <a href="{% url 'adminpanel:audit_log' %}" class="py-2 border-b-2 border-transparent hover:border-brand-600">Audit Log</a>
+  <a href="{% url 'adminpanel:site_settings' %}" class="py-2 border-b-2 border-transparent hover:border-brand-600">Settings</a>
+  <a href="{% url 'adminpanel:system_health' %}" class="py-2 border-b-2 border-transparent hover:border-brand-600">System Health</a>
+  <a href="{% url 'adminpanel:backups' %}" class="py-2 border-b-2 border-transparent hover:border-brand-600">Backups</a>
+  <a href="/admin/" class="py-2 border-b-2 border-transparent hover:border-brand-600">Django Admin</a>
+</div>

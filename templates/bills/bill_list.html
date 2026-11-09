@@ -1,0 +1,40 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Recurring Bills · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">Recurring Bills</h1>
+  <a href="{% url 'bills:create' %}" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">Add bill</a>
+</div>
+
+{% if overdue %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+  <p class="font-semibold text-red-700 text-sm">Overdue ({{ overdue|length }})</p>
+</div>
+{% endif %}
+
+<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for bill in bills %}
+  <div class="bg-white dark:bg-slate-800 border rounded-xl p-4 {% if bill.is_overdue %}border-red-300{% elif bill in due_soon %}border-amber-300{% else %}border-slate-200 dark:border-slate-700{% endif %} {% if bill.status == 'paused' %}opacity-60{% endif %}">
+    <div class="flex justify-between">
+      <p class="font-semibold">{{ bill.name }}</p>
+      <span class="text-xs">{{ bill.get_frequency_display }}</span>
+    </div>
+    <p class="text-xl font-bold mt-1">{{ bill.amount|money }}</p>
+    <p class="text-xs text-slate-500 mt-1">
+      Next due {{ bill.next_due_date }}
+      {% if bill.is_overdue %}<span class="text-red-600 font-medium">· OVERDUE</span>
+      {% elif bill in due_soon %}<span class="text-amber-600 font-medium">· Due soon</span>{% endif %}
+    </p>
+    <div class="flex gap-3 mt-3 text-sm">
+      {% if bill.status == 'active' %}<a href="{% url 'bills:pay' bill.pk %}" class="text-brand-600 font-medium">Mark paid</a>{% endif %}
+      <a href="{% url 'bills:update' bill.pk %}" class="text-slate-500">Edit</a>
+      <form method="post" action="{% url 'bills:pause' bill.pk %}">{% csrf_token %}<button class="text-slate-500">{% if bill.status == 'active' %}Pause{% else %}Resume{% endif %}</button></form>
+      <a href="{% url 'bills:delete' bill.pk %}" class="text-red-600">Delete</a>
+    </div>
+  </div>
+  {% empty %}
+  <p class="text-slate-500 col-span-full">No recurring bills yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

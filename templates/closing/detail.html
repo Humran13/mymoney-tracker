@@ -1,0 +1,60 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Daily Closing · {{ date }} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <div class="flex items-center gap-3">
+    <a href="{% url 'closing:detail' prev_date.isoformat %}" class="text-slate-400">&larr;</a>
+    <h1 class="text-xl font-semibold">{{ date }}</h1>
+    <a href="{% url 'closing:detail' next_date.isoformat %}" class="text-slate-400">&rarr;</a>
+  </div>
+  {% if closing.is_closed %}
+    <span class="text-sm bg-green-50 text-green-700 border border-green-200 rounded-full px-3 py-1">Closed</span>
+  {% else %}
+    <span class="text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1">Open</span>
+  {% endif %}
+</div>
+
+<div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Opening balance</p><p class="text-xl font-bold">{{ breakdown.opening_balance|money }}</p>
+  </div>
+  <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+    <p class="text-xs text-green-700">Received today</p><p class="text-xl font-bold text-green-700">{{ breakdown.received|money }}</p>
+  </div>
+  <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+    <p class="text-xs text-red-700">Spent today</p><p class="text-xl font-bold text-red-700">{{ breakdown.spent|money }}</p>
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Closing balance</p><p class="text-xl font-bold">{{ breakdown.closing_balance|money }}</p>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Day actions</h2>
+    <form method="post" class="space-y-3">
+      {% csrf_token %}
+      {% if closing.is_closed %}
+        <button name="action" value="reopen" class="w-full border border-slate-300 dark:border-slate-600 rounded-lg py-2.5 text-sm">Reopen this day</button>
+      {% else %}
+        <button name="action" value="close" class="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-lg py-2.5 text-sm">Close this day</button>
+      {% endif %}
+    </form>
+    <form method="post" class="mt-4">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="reconcile">
+      {% include "base/_field.html" with field=reconciliation_form.reconciliation_notes %}
+      <button type="submit" class="text-sm text-brand-600 font-medium">Save reconciliation note</button>
+    </form>
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Breakdown by type</h2>
+    {% for type_key, amount in breakdown.by_type.items %}
+    <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+      <span>{{ type_key }}</span><span>{{ amount|money }}</span>
+    </div>
+    {% empty %}<p class="text-sm text-slate-500">No activity recorded for this day.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

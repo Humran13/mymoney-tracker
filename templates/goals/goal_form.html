@@ -1,0 +1,16 @@
+{% extends "base/base.html" %}
+{% block title %}{% if mode == "edit" %}Edit goal{% else %}New goal{% endif %} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">{% if mode == "edit" %}Edit goal{% else %}Create a savings goal{% endif %}</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "base/_field.html" with field=form.name %}
+    {% include "base/_field.html" with field=form.target_amount %}
+    {% include "base/_field.html" with field=form.deadline %}
+    {% include "base/_field.html" with field=form.priority %}
+    {% include "base/_field.html" with field=form.description %}
+    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save goal</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Favorites · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">Favorites &amp; Templates</h1>
+  <a href="{% url 'transactions:template_create' %}" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">New favorite</a>
+</div>
+<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for t in templates %}
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="font-semibold">{{ t.name }}</p>
+    <p class="text-xs text-slate-500">{{ t.get_kind_display }} · {{ t.account.name|default:"No default account" }}</p>
+    <p class="text-lg font-bold mt-1">{% if t.default_amount %}{{ t.default_amount|money }}{% else %}—{% endif %}</p>
+    <div class="flex gap-3 mt-3 text-sm">
+      <form method="post" action="{% url 'transactions:template_use' t.pk %}">{% csrf_token %}<button class="text-brand-600 font-medium">Use now</button></form>
+      <form method="post" action="{% url 'transactions:template_delete' t.pk %}">{% csrf_token %}<button class="text-red-600">Delete</button></form>
+    </div>
+  </div>
+  {% empty %}
+  <p class="text-slate-500 col-span-full">No favorites saved yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

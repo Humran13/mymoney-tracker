@@ -1,0 +1,58 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Transactions · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+  <h1 class="text-xl font-semibold">Transactions</h1>
+  <div class="flex gap-2">
+    <a href="{% url 'transactions:create' %}?kind=income" class="px-4 py-2 text-sm rounded-lg border border-green-300 text-green-700">+ Income</a>
+    <a href="{% url 'transactions:create' %}?kind=expense" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">+ Expense</a>
+  </div>
+</div>
+
+<form method="get" class="grid sm:grid-cols-6 gap-2 mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+  {{ filter_form.kind }}
+  {{ filter_form.account }}
+  {{ filter_form.category }}
+  {{ filter_form.date_from }}
+  {{ filter_form.date_to }}
+  {{ filter_form.q }}
+  <button class="sm:col-span-6 justify-self-start px-4 py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-700">Filter</button>
+</form>
+
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-left text-slate-500 border-b border-slate-200 dark:border-slate-700">
+      <tr><th class="p-3">Date</th><th class="p-3">Description</th><th class="p-3">Category</th><th class="p-3">Account</th><th class="p-3">Amount</th><th class="p-3">Fee</th><th class="p-3"></th></tr>
+    </thead>
+    <tbody>
+      {% for txn in page %}
+      <tr class="border-b border-slate-100 dark:border-slate-700/50">
+        <td class="p-3 whitespace-nowrap">{{ txn.date }}</td>
+        <td class="p-3">{{ txn.description|default:"—" }}</td>
+        <td class="p-3">{{ txn.category.name|default:"—" }}</td>
+        <td class="p-3">{{ txn.account.name }}</td>
+        <td class="p-3 font-medium {% if txn.kind == 'income' %}text-green-600{% else %}text-red-600{% endif %}">
+          {% if txn.kind == 'income' %}+{% else %}-{% endif %}{{ txn.amount|money }}
+        </td>
+        <td class="p-3 text-slate-400">{% if txn.fee_amount %}{{ txn.fee_amount|money }}{% endif %}</td>
+        <td class="p-3 text-right whitespace-nowrap">
+          <a href="{% url 'transactions:update' txn.pk %}" class="text-brand-600">Edit</a>
+          <a href="{% url 'transactions:delete' txn.pk %}" class="text-red-600 ml-2">Delete</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td class="p-6 text-slate-500" colspan="7">No transactions match these filters.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if page.has_other_pages %}
+<div class="flex gap-2 mt-4 text-sm">
+  {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}" class="px-3 py-1 border rounded">Prev</a>{% endif %}
+  <span class="px-3 py-1">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a href="?page={{ page.next_page_number }}" class="px-3 py-1 border rounded">Next</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

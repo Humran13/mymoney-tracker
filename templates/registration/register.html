@@ -1,0 +1,29 @@
+{% extends "base/base.html" %}
+{% block title %}Create account · {{ APP_NAME }}{% endblock %}
+{% block guest_content %}
+<div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
+  <div class="text-center mb-6">
+    <h1 class="text-2xl font-bold text-brand-700 dark:text-brand-500">Create your account</h1>
+    <p class="text-sm text-slate-500 mt-1">Start tracking your real money today.</p>
+  </div>
+  {% if not registration_open %}
+    <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
+      Public registration is currently closed. Please contact an administrator.
+    </p>
+  {% endif %}
+  <form method="post" novalidate {% if not registration_open %}class="opacity-50 pointer-events-none"{% endif %}>
+    {% csrf_token %}
+    <div class="grid grid-cols-2 gap-3">
+      {% include "base/_field.html" with field=form.first_name %}
+      {% include "base/_field.html" with field=form.last_name %}
+    </div>
+    {% include "base/_field.html" with field=form.email %}
+    {% include "base/_field.html" with field=form.password1 %}
+    {% include "base/_field.html" with field=form.password2 %}
+    <button type="submit" {% if not registration_open %}disabled{% endif %} class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg py-2.5">Create account</button>
+  </form>
+  <p class="text-center text-sm text-slate-500 mt-6">
+    Already have an account? <a href="{% url 'users:login' %}" class="text-brand-600 font-medium">Log in</a>
+  </p>
+</div>
+{% endblock %}

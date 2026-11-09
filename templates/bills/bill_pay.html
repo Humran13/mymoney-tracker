@@ -1,0 +1,14 @@
+{% extends "base/base.html" %}
+{% block title %}Pay {{ bill.name }} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Mark "{{ bill.name }}" as paid</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "base/_field.html" with field=form.paid_date %}
+    {% include "base/_field.html" with field=form.account %}
+    {% include "base/_field.html" with field=form.amount %}
+    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Confirm payment</button>
+  </form>
+</div>
+{% endblock %}

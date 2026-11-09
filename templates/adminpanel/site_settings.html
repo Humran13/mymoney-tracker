@@ -1,0 +1,15 @@
+{% extends "base/base.html" %}
+{% block title %}Settings · Admin · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Site Settings</h1>
+{% include "adminpanel/_nav.html" %}
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <label class="flex items-center gap-2 mb-4 text-sm">{{ form.allow_public_registration }} Allow public registration</label>
+    <label class="flex items-center gap-2 mb-4 text-sm">{{ form.maintenance_mode }} Maintenance mode</label>
+    {% include "base/_field.html" with field=form.maintenance_message %}
+    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save settings</button>
+  </form>
+</div>
+{% endblock %}

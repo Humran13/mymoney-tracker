@@ -1,0 +1,21 @@
+{% extends "base/base.html" %}
+{% block title %}Admin Panel · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Administrator Panel</h1>
+{% include "adminpanel/_nav.html" %}
+<div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Total users</p><p class="text-2xl font-bold">{{ stats.total_users }}</p></div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Active</p><p class="text-2xl font-bold text-green-600">{{ stats.active_users }}</p></div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Suspended</p><p class="text-2xl font-bold text-red-600">{{ stats.suspended_users }}</p></div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Deactivated</p><p class="text-2xl font-bold text-amber-600">{{ stats.deactivated_users }}</p></div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Staff</p><p class="text-2xl font-bold">{{ stats.staff_users }}</p></div>
+</div>
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+  <h2 class="font-semibold mb-3">Recent audit events</h2>
+  {% for e in recent_events %}
+  <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+    <span>{{ e.action }} — {{ e.description }}</span><span class="text-slate-400">{{ e.created_at|date:"d M H:i" }}</span>
+  </div>
+  {% empty %}<p class="text-sm text-slate-500">No events yet.</p>{% endfor %}
+</div>
+{% endblock %}

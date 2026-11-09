@@ -1,0 +1,15 @@
+{% extends "base/base.html" %}
+{% block title %}Delete user · Admin · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4 text-red-700">Permanently delete {{ target.email }}?</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 p-6 max-w-lg">
+  <p class="text-sm mb-4">This permanently erases this user's account and all of their financial data. This cannot be undone.</p>
+  <form method="post">
+    {% csrf_token %}
+    <label class="block text-sm font-medium mb-1">Type DELETE to confirm</label>
+    <input type="text" name="confirm_phrase" required class="mb-4">
+    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg px-5 py-2.5">Permanently delete</button>
+    <a href="{% url 'adminpanel:user_detail' target.pk %}" class="ml-3 text-sm text-slate-500">Cancel</a>
+  </form>
+</div>
+{% endblock %}

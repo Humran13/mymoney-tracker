@@ -1,0 +1,14 @@
+{% extends "base/base.html" %}
+{% block title %}Delete account · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4 text-red-700">Permanently delete your account</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 p-6 max-w-lg">
+  <p class="text-sm text-slate-500 mb-4">This cannot be undone. All your accounts, transactions, budgets, debts, goals and reports will be permanently erased.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "base/_field.html" with field=form.password %}
+    {% include "base/_field.html" with field=form.confirm_phrase %}
+    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg px-5 py-2.5">Permanently delete my account</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}{{ borrowing.lender_name }} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">{{ borrowing.lender_name }}</h1>
+  <a href="{% url 'debts:borrowing_delete' borrowing.pk %}" class="text-sm text-red-600">Delete</a>
+</div>
+<div class="grid sm:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Borrowed</p><p class="text-xl font-bold">{{ borrowing.total_owed|money }}</p>
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Repaid</p><p class="text-xl font-bold">{{ borrowing.total_repaid|money }}</p>
+  </div>
+  <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+    <p class="text-xs text-red-700">Remaining</p><p class="text-xl font-bold text-red-700">{{ borrowing.outstanding|money }}</p>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Record a repayment</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "base/_field.html" with field=form.amount %}
+      {% include "base/_field.html" with field=form.date %}
+      {% include "base/_field.html" with field=form.paying_account %}
+      {% include "base/_field.html" with field=form.notes %}
+      <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Record repayment</button>
+    </form>
+  </div>
+  <div>
+    <h2 class="font-semibold mb-3">Repayment history</h2>
+    <div class="space-y-2">
+      {% for r in borrowing.repayments.all %}
+      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm flex justify-between">
+        <span>{{ r.date }} · {{ r.paying_account.name }}</span><span class="font-medium">{{ r.amount|money }}</span>
+      </div>
+      {% empty %}<p class="text-slate-500 text-sm">No repayments yet.</p>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

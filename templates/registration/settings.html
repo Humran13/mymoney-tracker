@@ -1,0 +1,16 @@
+{% extends "base/base.html" %}
+{% block title %}Settings · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Settings</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "base/_field.html" with field=form.budget_warning_threshold_1 %}
+    {% include "base/_field.html" with field=form.budget_warning_threshold_2 %}
+    {% include "base/_field.html" with field=form.bill_reminder_days_ahead %}
+    {% include "base/_field.html" with field=form.default_account %}
+    <label class="flex items-center gap-2 mb-4 text-sm">{{ form.notifications_enabled }} Enable in-app reminders</label>
+    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save settings</button>
+  </form>
+</div>
+{% endblock %}

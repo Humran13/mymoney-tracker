@@ -1,0 +1,42 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Accounts · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">Financial Accounts</h1>
+  <div class="flex gap-2">
+    <a href="{% url 'accounts:transfer_create' %}" class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Transfer money</a>
+    <a href="{% url 'accounts:create' %}" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">Add account</a>
+  </div>
+</div>
+
+<div class="bg-brand-700 text-white rounded-2xl p-6 mb-6">
+  <p class="text-sm opacity-80">Total available (active accounts)</p>
+  <p class="text-3xl font-bold mt-1">{{ total|money }}</p>
+</div>
+
+<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for account in accounts %}
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 {% if account.status != 'active' %}opacity-60{% endif %}">
+    <div class="flex justify-between items-start">
+      <div>
+        <p class="font-semibold">{{ account.name }}</p>
+        <p class="text-xs text-slate-500">{{ account.get_account_type_display }}</p>
+      </div>
+      {% if account.status != 'active' %}<span class="text-xs bg-slate-100 dark:bg-slate-700 rounded px-2 py-0.5">Archived</span>{% endif %}
+    </div>
+    <p class="text-2xl font-bold mt-3">{{ account.balance|money:account.currency_code }}</p>
+    <div class="flex gap-3 mt-3 text-sm">
+      <a href="{% url 'accounts:update' account.pk %}" class="text-brand-600">Edit</a>
+      {% if account.status == 'active' %}
+      <form method="post" action="{% url 'accounts:archive' account.pk %}">{% csrf_token %}<button class="text-slate-500">Archive</button></form>
+      {% else %}
+      <form method="post" action="{% url 'accounts:reactivate' account.pk %}">{% csrf_token %}<button class="text-slate-500">Reactivate</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <p class="text-slate-500 col-span-full">No accounts yet. <a href="{% url 'accounts:create' %}" class="text-brand-600">Add your first account</a>.</p>
+  {% endfor %}
+</div>
+{% endblock %}

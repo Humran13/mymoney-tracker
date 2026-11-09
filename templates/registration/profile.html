@@ -1,0 +1,23 @@
+{% extends "base/base.html" %}
+{% block title %}Profile · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Profile</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <div class="grid grid-cols-2 gap-3">
+      {% include "base/_field.html" with field=user_form.first_name %}
+      {% include "base/_field.html" with field=user_form.last_name %}
+    </div>
+    {% include "base/_field.html" with field=profile_form.display_name %}
+    {% include "base/_field.html" with field=profile_form.timezone %}
+    {% include "base/_field.html" with field=profile_form.theme %}
+    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save changes</button>
+  </form>
+</div>
+<div class="mt-8 max-w-lg space-y-3">
+  <h2 class="text-sm font-semibold text-slate-500 uppercase">Account</h2>
+  <a href="{% url 'users:deactivate_account' %}" class="block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm hover:border-amber-300">Deactivate my account</a>
+  <a href="{% url 'users:delete_account' %}" class="block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-red-600 hover:border-red-300">Delete my account permanently</a>
+</div>
+{% endblock %}

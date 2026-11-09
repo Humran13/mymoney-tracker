@@ -1,0 +1,31 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Budgets · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">Budgets — {{ month|date:"F Y" }}</h1>
+  <a href="{% url 'budgets:create' %}" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">New budget</a>
+</div>
+<div class="space-y-3">
+  {% for b in budgets %}
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <div class="flex justify-between mb-2">
+      <p class="font-medium">{{ b.category.name }}</p>
+      <div class="text-sm">
+        <a href="{% url 'budgets:update' b.pk %}" class="text-brand-600">Edit</a>
+        <form method="post" action="{% url 'budgets:delete' b.pk %}" class="inline">{% csrf_token %}<button class="text-red-600 ml-2">Delete</button></form>
+      </div>
+    </div>
+    <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 mb-2">
+      <div class="h-2.5 rounded-full {% if b.warn_level == 'danger' %}bg-red-600{% elif b.warn_level == 'warning' %}bg-amber-500{% else %}bg-green-500{% endif %}" style="width: {{ b.pct }}%"></div>
+    </div>
+    <div class="flex justify-between text-sm text-slate-500">
+      <span>{{ b.spent|money }} spent of {{ b.amount|money }}</span>
+      <span>{{ b.pct }}% used · {{ b.remaining|money }} remaining</span>
+    </div>
+  </div>
+  {% empty %}
+  <p class="text-slate-500">No budgets set for this month yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

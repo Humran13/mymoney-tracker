@@ -1,0 +1,13 @@
+{% extends "base/base.html" %}
+{% block title %}Closing History · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Closing History</h1>
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-700/50">
+  {% for c in closings %}
+  <a href="{% url 'closing:detail' c.date.isoformat %}" class="flex justify-between p-3 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/40">
+    <span>{{ c.date }}</span>
+    <span>{% if c.is_closed %}<span class="text-green-600">Closed</span>{% else %}<span class="text-amber-600">Open</span>{% endif %}</span>
+  </a>
+  {% empty %}<p class="p-6 text-slate-500 text-sm">No closings recorded yet.</p>{% endfor %}
+</div>
+{% endblock %}

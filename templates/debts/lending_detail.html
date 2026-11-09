@@ -1,0 +1,45 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}{{ lending.borrower_name }} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">{{ lending.borrower_name }}</h1>
+  <a href="{% url 'debts:lending_delete' lending.pk %}" class="text-sm text-red-600">Delete</a>
+</div>
+<div class="grid sm:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Lent</p><p class="text-xl font-bold">{{ lending.amount|money }}</p>
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Received</p><p class="text-xl font-bold">{{ lending.total_principal_received|money }}</p>
+  </div>
+  <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+    <p class="text-xs text-green-700">Still Owed</p><p class="text-xl font-bold text-green-700">{{ lending.outstanding|money }}</p>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Record money received</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "base/_field.html" with field=form.principal_amount %}
+      {% include "base/_field.html" with field=form.interest_amount %}
+      {% include "base/_field.html" with field=form.date %}
+      {% include "base/_field.html" with field=form.receiving_account %}
+      {% include "base/_field.html" with field=form.notes %}
+      <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Record repayment</button>
+    </form>
+  </div>
+  <div>
+    <h2 class="font-semibold mb-3">Repayment history</h2>
+    <div class="space-y-2">
+      {% for r in lending.repayments.all %}
+      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm flex justify-between">
+        <span>{{ r.date }} · {{ r.receiving_account.name }}</span><span class="font-medium">{{ r.total_received|money }}</span>
+      </div>
+      {% empty %}<p class="text-slate-500 text-sm">No repayments yet.</p>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

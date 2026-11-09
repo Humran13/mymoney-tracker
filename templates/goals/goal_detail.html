@@ -1,0 +1,73 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}{{ goal.name }} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">{{ goal.name }}</h1>
+  <div class="text-sm flex gap-3">
+    <a href="{% url 'goals:update' goal.pk %}" class="text-brand-600">Edit</a>
+    <form method="post" action="{% url 'goals:pause' goal.pk %}">{% csrf_token %}<button class="text-slate-500">{% if goal.status == 'active' %}Pause{% else %}Resume{% endif %}</button></form>
+    <form method="post" action="{% url 'goals:archive' goal.pk %}">{% csrf_token %}<button class="text-red-600">Archive</button></form>
+  </div>
+</div>
+
+<div class="grid sm:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Saved</p><p class="text-xl font-bold">{{ goal.current_saved|money }}</p>
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Target</p><p class="text-xl font-bold">{{ goal.target_amount|money }}</p>
+  </div>
+  <div class="bg-brand-50 border border-brand-100 rounded-xl p-4">
+    <p class="text-xs text-brand-700">Remaining</p><p class="text-xl font-bold text-brand-700">{{ goal.remaining|money }}</p>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Add or withdraw savings</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "base/_field.html" with field=form.amount %}
+      {% include "base/_field.html" with field=form.date %}
+      {% include "base/_field.html" with field=form.note %}
+      <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save</button>
+    </form>
+  </div>
+  <div>
+    <h2 class="font-semibold mb-3">History</h2>
+    <div class="space-y-2">
+      {% for a in goal.allocations.all %}
+      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm flex justify-between">
+        <span>{{ a.date }} {% if a.note %}· {{ a.note }}{% endif %}</span>
+        <span class="font-medium {% if a.amount < 0 %}text-red-600{% else %}text-green-600{% endif %}">{{ a.amount|money }}</span>
+      </div>
+      {% empty %}<p class="text-slate-500 text-sm">No activity yet.</p>{% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-2">Forecast</h2>
+    {% if forecast.estimated_completion_date %}
+      <p class="text-lg font-bold text-brand-700">{{ forecast.estimated_completion_date }}</p>
+    {% endif %}
+    <p class="text-sm text-slate-500">{{ forecast.message }}</p>
+    <p class="text-xs text-slate-400 mt-2">Daily savings capacity: {{ forecast.daily_capacity|money }} ({{ forecast.avg_daily_income|money }} avg income − {{ forecast.avg_daily_expense|money }} avg expense)</p>
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-2">Savings target calculator</h2>
+    {% if target_calc.deadline %}
+      <p class="text-sm">Needed by <strong>{{ target_calc.deadline }}</strong> ({{ target_calc.remaining_days }} days / {{ target_calc.remaining_months }} months)</p>
+      <p class="text-sm mt-1">Required: <strong>{{ target_calc.required_daily|money }}/day</strong> or {{ target_calc.required_monthly|money }}/month</p>
+      <p class="text-sm mt-1">Your current pace: {{ target_calc.current_pace_per_day|money }}/day</p>
+      {% if target_calc.shortfall %}
+        <p class="text-sm text-amber-600 mt-1">Shortfall: {{ target_calc.shortfall|money }}/day below target pace.</p>
+      {% endif %}
+    {% else %}
+      <p class="text-sm text-slate-500">Set a deadline on this goal to see required savings pace.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base/base.html" %}
+{% block title %}Deactivate account · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Deactivate your account</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-amber-200 p-6 max-w-lg">
+  <p class="text-sm text-slate-500 mb-4">You'll be logged out immediately. Logging in again with your password reactivates your account and restores access to all your data.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "base/_field.html" with field=form.password %}
+    <label class="flex items-start gap-2 mb-4 text-sm">{{ form.confirm }} <span>{{ form.confirm.label }}</span></label>
+    <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg px-5 py-2.5">Deactivate account</button>
+  </form>
+</div>
+{% endblock %}

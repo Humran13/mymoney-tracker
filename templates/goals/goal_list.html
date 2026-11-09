@@ -1,0 +1,36 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Goals · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-xl font-semibold">Savings Goals</h1>
+  <div class="flex gap-2">
+    <a href="{% url 'goals:required_income' %}" class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Required income</a>
+    <a href="{% url 'goals:create' %}" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">New goal</a>
+  </div>
+</div>
+
+{% if over_allocated %}
+<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-amber-700">
+  You've allocated {{ total_allocated|money }} across active goals, more than the {{ cash_on_hand|money }} you currently hold across active accounts. Allocations are planned savings, not guaranteed — review your goals.
+</div>
+{% endif %}
+
+<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for g in goals %}
+  <a href="{% url 'goals:detail' g.pk %}" class="block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 {% if g.status != 'active' %}opacity-60{% endif %}">
+    <div class="flex justify-between">
+      <p class="font-semibold">{{ g.name }}</p>
+      <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700">{{ g.get_status_display }}</span>
+    </div>
+    <p class="text-sm text-slate-500 mt-1">{{ g.saved|money }} of {{ g.target_amount|money }}</p>
+    <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 my-2">
+      <div class="h-2.5 rounded-full bg-brand-600" style="width: {{ g.pct }}%"></div>
+    </div>
+    {% if g.deadline %}<p class="text-xs text-slate-500">Target date: {{ g.deadline }}</p>{% endif %}
+  </a>
+  {% empty %}
+  <p class="text-slate-500 col-span-full">No goals yet. Set your first one — nothing is created automatically.</p>
+  {% endfor %}
+</div>
+{% endblock %}
