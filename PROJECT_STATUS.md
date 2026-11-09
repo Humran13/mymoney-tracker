@@ -1,10 +1,84 @@
 # Project Status
 
-**Last updated:** 2026-11-09
-**Current phase:** Phase 9 (final hardening, mobile optimization, testing,
-GitHub publication, CloudPanel deployment prep) — complete except for the
+**Last updated:** 2026-11-10
+**Current phase:** Phase 10 (live CloudPanel VPS deployment) — complete.
+MyMoney Tracker is deployed and live at https://money.therealworldboosts.com.
+See the Phase 10 section below for deployment details. Phase 9 (final
+hardening, mobile optimization, testing, GitHub publication, CloudPanel
+deployment prep) — complete except for the
 items under "External blockers" below, which require live VPS/CloudPanel
 access this environment doesn't have.
+
+## Phase 10 — live deployment (2026-11-10)
+
+Deployed to the owner's existing production CloudPanel VPS (shared with
+other live sites — nothing else on that server was disrupted; verified
+before and after).
+
+- **Domain:** https://money.therealworldboosts.com (DNS + Let's Encrypt
+  cert both live and verified)
+- **Deploy path:** `/home/therealworldboosts-money/mymoney-tracker/`
+  (`app/`, `data/postgres/`, `backups/postgres/`), site user
+  `therealworldboosts-money`
+- **Commit deployed:** `3fcafc3` (includes a fix made *during* this
+  deployment — see below)
+- **CloudPanel site:** created via `clpctl site:add:reverse-proxy`,
+  pointed at `127.0.0.1:8001`; cert issued via `clpctl
+  lets-encrypt:install:certificate`. CloudPanel's own Nginx owns ports
+  80/443; this app's standalone Caddy profile was never started.
+- **Compose project name:** `mymoney-tracker` (set via
+  `COMPOSE_PROJECT_NAME` in `.env`) — no collision with the VPS's other
+  Docker projects (`daily-figures`, `spidqah-collections-app`).
+- **A real bug was found and fixed during this deployment**: deleting a
+  user who had ever recorded a transaction, transfer, borrowing, or
+  lending raised `ProtectedError` and would have crashed for essentially
+  every real user. Root cause, fix, and regression tests in
+  `apps/core/user_deletion.py` / `tests/test_user_deletion.py` (commit
+  `3fcafc3`). CI passed, then redeployed and re-verified live.
+- **Live smoke test**: 15/15 automated checks passed against the real
+  public domain (login, mobile nav + no horizontal overflow at 390px,
+  income/expense, mobile-money fee, transfer, borrowing+repayment,
+  lending+repayment, daily closing close/reopen, monthly report, savings
+  goal + "what if" scenario, admin-panel isolation for a non-staff user) —
+  using a disposable test account created and fully deleted afterward.
+- **Backup/restore verified live**: a real backup was taken, restored
+  into an isolated database on the same production Postgres instance, and
+  confirmed to contain the correct schema (33 tables) and the correct
+  admin record before being dropped.
+- **Daily backups automated** via `/etc/cron.d/mymoney-tracker-backup`
+  (02:15 server time, 30-day retention), permissions tightened to `600`
+  owned by the site user.
+- **Administrator account**: `humranaby@gmail.com`, superuser + staff
+  confirmed, but **created with no password set** — several attempts to
+  generate/relay a password through this session were correctly blocked
+  by the platform's own credential-handling safeguards, so the owner sets
+  their own password directly over SSH (`docker compose exec web python
+  manage.py changepassword humranaby@gmail.com`), which never passes
+  through this session at all. This is pending the owner's action.
+- **Public registration**: confirmed disabled on the live site (the
+  actual toggle is a DB-backed `SiteConfiguration` row, not just the
+  `.env` value — the env var alone had no effect until this was set
+  directly; worth knowing if you ever wonder why toggling `.env` didn't
+  seem to do anything).
+- **SMTP**: not configured (no credentials provided) — password reset
+  will log to console/nowhere until `SMTP_HOST` etc. are set in `.env` on
+  the server and the `web` service is restarted.
+- **CloudPanel remote backups**: this CloudPanel installation (CLI 6.0.8)
+  has no backup/remote-backup feature at all — confirmed by dumping its
+  full command list. Google Drive backup support is a CloudPanel Pro
+  feature. See `docs/CLOUDPANEL.md` for what this means and the
+  documented alternative (`rclone`, installed but unconfigured).
+- **Existing VPS services** (`daily-figures`, `spidqah-collections-app`,
+  `hbbr`/`hbbs`) confirmed still running/healthy with unchanged uptimes
+  after this deployment.
+- **Two documentation bugs in `docs/CLOUDPANEL.md` itself were found and
+  fixed while actually following it**: the Postgres UID was wrong (`999`
+  assumed vs. `70` actual, for this Alpine-based image — verify, don't
+  assume, is exactly the lesson), and the suggested
+  `docker compose run --rm web python manage.py migrate` step for
+  previewing migrations doesn't work as written, because the image's
+  `ENTRYPOINT` ignores the command passed to `docker compose run` and
+  always runs its own full startup sequence regardless.
 
 ## Phase 9 — what was done
 

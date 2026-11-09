@@ -60,12 +60,18 @@ sudo -u "$CLOUDPANEL_SITE_USER" mkdir -p \
   "$APP_DEPLOY_DIR/backups/postgres"
 ```
 
-**Permissions matter for Postgres specifically.** The official
-`postgres:16-alpine` image runs as uid/gid `999` inside the container, and
-needs to own its data directory:
+**Permissions matter for Postgres specifically — verify the UID, don't
+assume it.** Don't trust this number blindly; different base images use
+different UIDs (confirmed by checking directly — `docker run --rm
+postgres:16-alpine id postgres` — in an earlier version of this guide
+before an actual deployment, this was assumed to be `999`, which is wrong
+for this Alpine-based image):
 
 ```bash
-sudo chown -R 999:999 "$APP_DEPLOY_DIR/data/postgres"
+docker run --rm postgres:16-alpine id postgres
+# uid=70(postgres) gid=70(postgres) ...
+
+sudo chown -R 70:70 "$APP_DEPLOY_DIR/data/postgres"
 ```
 
 Do **not** `chown` the whole CloudPanel home directory — only the specific
@@ -118,23 +124,38 @@ curl http://127.0.0.1:${APP_PORT:-8001}/health/
 # {"status": "ok", "database": true}
 ```
 
-## 5. Point a CloudPanel site at it **[VPS-ONLY — verify on first deploy]**
+## 5. Point a CloudPanel site at it
 
-This repo cannot configure CloudPanel itself — it has no access to that
-UI/API from this environment. In the CloudPanel admin:
+**Verified working** (deployed for real — `money.therealworldboosts.com`,
+CloudPanel CLI 6.0.8). CloudPanel's `clpctl` exposes this entirely from the
+command line, no web UI needed — useful on a server you're managing over
+SSH:
 
-1. Create (or reuse) a site for your domain, type "Reverse Proxy" (or
-   equivalent in your CloudPanel version).
-2. Set the proxy target to `http://127.0.0.1:${APP_PORT}` (e.g. `:8001`).
-3. Let CloudPanel issue/renew the site's own Let's Encrypt certificate —
-   don't also run this app's Caddy container (you aren't, in this mode).
-4. Confirm `X-Forwarded-Proto`/`X-Forwarded-For` are forwarded (CloudPanel's
-   Nginx does this by default); `config/settings/prod.py` already trusts
-   `X-Forwarded-Proto` via `SECURE_PROXY_SSL_HEADER` for exactly this setup
-   — this was the specific fix for a redirect-loop bug found and fixed
-   while testing this app's own standalone Caddy setup (see
-   `DECISIONS.md`), and the same header is what any reverse proxy needs to
-   set correctly here.
+```bash
+# 1. Create the site itself as a reverse-proxy type, pointed at the app port.
+#    This also creates the site user and its home directory.
+clpctl site:add:reverse-proxy \
+  --domainName=money.yourdomain.com \
+  --reverseProxyUrl=http://127.0.0.1:${APP_PORT:-8001} \
+  --siteUser=<chosen-site-username> \
+  --siteUserPassword='<a-strong-password>'
+
+# 2. DNS must already resolve to this VPS before the next step — Let's
+#    Encrypt's HTTP-01 challenge needs it. Verify first:
+nslookup money.yourdomain.com   # must return this VPS's IP
+
+# 3. Issue the certificate.
+clpctl lets-encrypt:install:certificate --domainName=money.yourdomain.com
+```
+
+`X-Forwarded-Proto`/`X-Forwarded-For` are forwarded by CloudPanel's Nginx
+by default; `config/settings/prod.py` already trusts `X-Forwarded-Proto`
+via `SECURE_PROXY_SSL_HEADER` for exactly this setup — this is the same
+fix that was needed for a redirect-loop bug found while testing this app's
+own standalone Caddy setup in an earlier phase (see `DECISIONS.md`), and
+it was verified working again against CloudPanel's Nginx on this actual
+deployment (no redirect loop, HSTS and `Secure` cookies present, valid
+cert, `curl https://money.therealworldboosts.com/health/` returns 200).
 
 ## 6. Backups
 
@@ -156,27 +177,41 @@ extra background service needed for something this infrequent):
 
 Add your own retention cleanup (e.g. `find "$POSTGRES_BACKUP_DIR" -name '*.sql' -mtime +30 -delete`) if you don't want them accumulating forever.
 
-### CloudPanel remote backups **[VPS-ONLY — verify when you have CloudPanel access]**
+### CloudPanel remote backups — checked directly on the actual VPS
 
-To get these backup archives into CloudPanel's own remote-backup workflow
-(Google Drive or another supported destination), the backup directory must
-sit inside whatever directory CloudPanel's backup feature actually covers
-for that site — this repo cannot verify that scope without a real
-CloudPanel installation to inspect. Concretely, before relying on this:
+**Finding: this CloudPanel installation (CLI 6.0.8) has no built-in
+remote-backup command at all.** The full `clpctl` command list was
+dumped directly (`clpctl` with no arguments) and inspected — its
+categories are `cloudflare`, `cloudpanel`, `db`, `lets-encrypt`, `site`,
+`system`, `user`, `vhost-template(s)`; there is no `backup` category, no
+Google Drive integration, nothing that backs up a site's files or
+database automatically. (Google Drive/remote-backup support is a
+CloudPanel **Pro** feature per their own docs; this appears to be the
+free Community edition.)
 
-1. Confirm in CloudPanel's own backup settings for this site exactly which
-   directories are included (some CloudPanel versions back up `htdocs/`
-   specifically, not a site user's entire home directory).
-2. If `$POSTGRES_BACKUP_DIR` falls outside that scope, either move it
-   inside the covered directory, or set up a separate, explicit sync (e.g.
-   `rclone` to the same remote CloudPanel uses) for just that directory.
-3. Never place backup archives inside a directory CloudPanel serves
-   publicly (e.g. a site's `htdocs/` webroot) — they must stay unreachable
-   over HTTP.
+This isn't a gap specific to this app — it's the existing convention on
+this VPS. Another application already running on this server
+(`daily-figures`) handles its own backups the same way: via a dedicated
+`systemd` timer/service (`/etc/systemd/system/daily-figures-backup.timer`),
+not CloudPanel. MyMoney Tracker's cron-based `backup_db` schedule (above)
+follows that same established pattern rather than inventing a new one.
 
-This app does not invent or assume a remote destination is already active;
-treat remote delivery of backups as a manual step to confirm on the VPS,
-not something this codebase configures.
+**No remote (Google Drive or otherwise) delivery is configured.** No
+credentials were available, and none were invented. `rclone` is already
+installed on this server (`/usr/bin/rclone`, verified directly) but has
+no remotes configured (`rclone listremotes` returns nothing) — it isn't
+being used for anything yet. It's a reasonable option to set up yourself
+(`rclone config` to add a Google Drive or other remote, then a cron line
+like the one below) if you want backups leaving this VPS:
+
+```bash
+# Example only — requires your own `rclone config` remote set up first.
+45 2 * * * root rclone copy /home/<site-user>/mymoney-tracker/backups/postgres remote:mymoney-backups --min-age 1h
+```
+
+Never place backup archives inside a directory CloudPanel serves
+publicly (e.g. a site's `htdocs/` webroot) — `$POSTGRES_BACKUP_DIR` here
+is outside any site's webroot, so this is already satisfied.
 
 ## 7. Restoring a backup
 
@@ -209,17 +244,24 @@ curl http://127.0.0.1:${APP_PORT:-8001}/health/
 # 2. Back up before touching anything.
 docker compose exec -T web python manage.py backup_db
 
-# 3. Pull the verified code.
-git pull
+# 3. Pull the verified code — as the site user, not root (the app
+#    directory is owned by that user; a plain `git pull` run as root hits
+#    git's "dubious ownership" protection).
+sudo -u $CLOUDPANEL_SITE_USER git pull
 
 # 4. Rebuild only the web image — db is untouched, its data directory
 #    is a bind mount on the host and is never part of this image.
 docker compose build web
 
-# 5. Apply migrations, then restart just the web container.
-#    (entrypoint.sh runs `migrate` automatically on start, but running it
-#    explicitly first lets you see any migration errors before restarting.)
-docker compose run --rm web python manage.py migrate --no-input
+# 5. Restart just the web container — docker/entrypoint.sh runs `migrate`
+#    automatically every time it starts, so this is also when migrations
+#    for the new code actually get applied.
+#    (`docker compose run --rm web <cmd>` does NOT work for previewing
+#    this step in isolation: the image's ENTRYPOINT ignores the command
+#    you pass and always runs its own full startup sequence regardless —
+#    found and fixed in this exact deployment. To preview a migration
+#    without applying it first, use `docker compose exec web python
+#    manage.py sqlmigrate <app> <migration_name>` instead.)
 docker compose up -d web
 
 # 6. Verify.
@@ -256,16 +298,24 @@ data:
    `docker compose build web && docker compose up -d web` — no database
    action needed.
 
-## What was actually verified vs. what still needs VPS access
+## What was actually verified — now against a real production deployment
+
+This section originally said these items were only verified locally,
+pending real VPS access. That access happened — `money.therealworldboosts.com`,
+deployed on a shared production CloudPanel VPS alongside other live
+sites — and every item below was re-verified against that real
+deployment, not just locally.
 
 | Item | Status |
 |---|---|
-| `docker compose build` / `up` (db + web, no Caddy) | Verified locally |
-| Postgres data persists as real files under a bind-mounted host directory | Verified locally |
-| `backup_db` writes a real file under the bind-mounted backup directory | Verified locally |
-| Restoring that backup reproduces the schema and data correctly | Verified locally (restored into an isolated database) |
-| App reachable via `127.0.0.1:$APP_PORT` on the host | Verified locally |
-| `SECURE_PROXY_SSL_HEADER` works correctly behind a reverse proxy | Verified locally (against this app's own Caddy, which behaves the same way CloudPanel's Nginx does — trusts `X-Forwarded-Proto`) |
-| CloudPanel reverse-proxy site configuration | **Not verified** — no CloudPanel installation was available in this environment |
-| CloudPanel's backup scope actually covering `$POSTGRES_BACKUP_DIR` | **Not verified** — depends on the specific CloudPanel version/configuration on the real VPS |
-| Google Drive (or other) remote backup delivery | **Not configured, not verified** — no credentials were available or invented |
+| `docker compose build` / `up` (db + web, no Caddy), unique Compose project name | **Verified live** (no conflict with the VPS's other Docker projects) |
+| Postgres data persists as real files under a bind-mounted host directory, correct UID (70:70, verified — not assumed) | **Verified live** |
+| `backup_db` writes a real file under the bind-mounted backup directory | **Verified live** |
+| Restoring that backup reproduces the schema and data correctly | **Verified live** (restored into an isolated database on the same server) |
+| App reachable via `127.0.0.1:$APP_PORT` on the host | **Verified live** |
+| `SECURE_PROXY_SSL_HEADER` works correctly behind a reverse proxy | **Verified live** against CloudPanel's actual Nginx (HTTPS, HSTS, `Secure` cookies, no redirect loop) |
+| CloudPanel reverse-proxy site configuration | **Verified live** via `clpctl site:add:reverse-proxy` + `lets-encrypt:install:certificate` |
+| CloudPanel's backup scope covering `$POSTGRES_BACKUP_DIR` | **Checked directly: this CloudPanel edition has no backup feature at all** (see above) — not a gap in this app, a property of the installed CloudPanel edition |
+| Google Drive (or other) remote backup delivery | **Not configured** — no credentials were available or invented; `rclone` is installed but has zero remotes configured |
+| Full application smoke test against the live domain (login, mobile nav/overflow at 390px, income/expense, mobile money fee, transfer, borrowing+repayment, lending+repayment, daily closing, monthly report, savings goal + scenario, admin-panel isolation) | **Verified live** — 15/15 automated checks passed, using a disposable test account deleted immediately afterward |
+| A real bug this deployment caught | Deleting a user with any transaction/transfer/borrowing/lending history raised `ProtectedError` — fixed in `apps/core/user_deletion.py`, regression-tested, redeployed, re-verified live |
