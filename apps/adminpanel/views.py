@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.core.audit import log_audit_event
 from apps.core.models import AuditEvent
+from apps.core.user_deletion import delete_user_and_all_data
 from apps.users.models import User
 
 from .forms import SiteConfigurationForm
@@ -101,7 +102,7 @@ def user_delete(request, pk):
             return render(request, "adminpanel/user_delete_confirm.html", {"target": target})
         email = target.email
         log_audit_event(request.user, "admin_action", description=f"Administrator deleted account {email}", request=request)
-        target.delete()
+        delete_user_and_all_data(target)
         messages.success(request, f"Account {email} has been permanently deleted.")
         return redirect("adminpanel:user_list")
     return render(request, "adminpanel/user_delete_confirm.html", {"target": target})

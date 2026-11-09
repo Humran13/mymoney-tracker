@@ -13,6 +13,7 @@ from django.views import View
 from django.views.generic import FormView
 
 from apps.core.audit import log_audit_event
+from apps.core.user_deletion import delete_user_and_all_data
 
 from .forms import (
     DeactivateAccountForm,
@@ -23,7 +24,6 @@ from .forms import (
     UserBasicForm,
     UserSettingsForm,
 )
-from .models import User
 
 
 def _registration_open():
@@ -161,9 +161,8 @@ def delete_account_view(request):
                 form.add_error("password", "Incorrect password.")
             else:
                 log_audit_event(None, "delete", description=f"User {user.email} deleted own account")
-                user_id = user.pk
                 logout(request)
-                User.objects.filter(pk=user_id).delete()
+                delete_user_and_all_data(user)
                 messages.info(request, "Your account and all associated data have been permanently deleted.")
                 return redirect("users:login")
     else:
