@@ -13,7 +13,7 @@
     {% if form.non_field_errors %}
       <p class="text-sm text-red-600 mb-3">{{ form.non_field_errors.0 }}</p>
     {% endif %}
-    <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg py-2.5">Log in</button>
+    <button type="submit" id="submit-btn" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg py-2.5">Log in</button>
   </form>
   <p class="text-center text-sm mt-4">
     <a href="{% url 'users:password_reset' %}" class="text-brand-600 font-medium">Forgot your password?</a>

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
   <h1 class="text-xl font-semibold">Monthly Report — {{ report.start|date:"F Y" }}</h1>
-  <form method="get" class="flex gap-2 items-center text-sm">
+  <form method="get" class="flex flex-wrap gap-2 items-center text-sm w-full sm:w-auto">
     <input type="number" name="year" value="{{ report.year }}" title="Year" placeholder="Year" class="!w-24" min="2000" max="2100">
     <input type="number" name="month" value="{{ report.month }}" title="Month" placeholder="Month" class="!w-20" min="1" max="12">
     <button type="submit" class="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700">Go</button>

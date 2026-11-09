@@ -1,0 +1,13 @@
+{
+  "name": "mymoney-tracker-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Tailwind CSS build for MyMoney Tracker's Django templates. No JS bundler — HTMX/Alpine are loaded directly in templates.",
+  "scripts": {
+    "build:css": "tailwindcss -i ./static_src/input.css -o ./static/css/tailwind.css --minify",
+    "watch:css": "tailwindcss -i ./static_src/input.css -o ./static/css/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

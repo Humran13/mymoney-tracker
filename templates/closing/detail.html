@@ -2,7 +2,7 @@
 {% load money %}
 {% block title %}Daily Closing · {{ date }} · {{ APP_NAME }}{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
   <div class="flex items-center gap-3">
     <a href="{% url 'closing:detail' prev_date.isoformat %}" class="text-slate-400">&larr;</a>
     <h1 class="text-xl font-semibold">{{ date }}</h1>

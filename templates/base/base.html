@@ -10,13 +10,7 @@
   <link rel="icon" href="{% static 'icons/icon-192.png' %}">
   <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
   <meta name="theme-color" content="#0f766e">
-  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: { extend: { colors: { brand: { 50:'#f0fdfa',100:'#ccfbf1',500:'#14b8a6',600:'#0d9488',700:'#0f766e',900:'#134e4a' } } } }
-    }
-  </script>
+  <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script defer src="https://unpkg.com/alpinejs@3.14.3/dist/cdn.min.js"></script>
   <script>
@@ -24,32 +18,21 @@
       document.documentElement.classList.add('dark');
     }
   </script>
-  <style>
-    [x-cloak]{display:none !important;}
-    input[type=text], input[type=email], input[type=password], input[type=number],
-    input[type=date], select, textarea {
-      width: 100%; border-radius: 0.5rem; border: 1px solid rgb(203 213 225);
-      padding: 0.5rem 0.75rem; background: white; color: inherit;
-    }
-    .dark input[type=text], .dark input[type=email], .dark input[type=password],
-    .dark input[type=number], .dark input[type=date], .dark select, .dark textarea {
-      background: rgb(30 41 59); border-color: rgb(71 85 105);
-    }
-    input[type=checkbox] { width: 1rem; height: 1rem; }
-  </style>
   {% block extra_head %}{% endblock %}
 </head>
 <body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
   {% if user.is_authenticated %}
-  <div class="min-h-full flex">
+  <div class="min-h-full flex" x-data="{mobileNavOpen: false}">
     {% include "base/_sidebar.html" %}
+    {% include "base/_mobile_nav.html" %}
     <div class="flex-1 flex flex-col min-w-0">
       {% include "base/_topbar.html" %}
-      <main class="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto">
+      <main class="flex-1 p-4 sm:p-6 pb-24 md:pb-6 max-w-7xl w-full mx-auto">
         {% include "base/_messages.html" %}
         {% block content %}{% endblock %}
       </main>
     </div>
+    {% include "base/_mobile_quickbar.html" %}
   </div>
   {% else %}
   <main class="min-h-full flex items-center justify-center p-4">

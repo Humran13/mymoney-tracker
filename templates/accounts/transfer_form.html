@@ -12,7 +12,7 @@
     {% include "base/_field.html" with field=form.occurred_on %}
     {% include "base/_field.html" with field=form.description %}
     {% if form.non_field_errors %}<p class="text-sm text-red-600 mb-3">{{ form.non_field_errors.0 }}</p>{% endif %}
-    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Record transfer</button>
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Record transfer</button>
   </form>
 </div>
 {% endblock %}

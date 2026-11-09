@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.db import models
 
-from apps.core.models import TimeStampedModel, UserOwnedModel, money_field
+from apps.core.models import UserOwnedModel, money_field
 
 
 class Borrowing(UserOwnedModel):

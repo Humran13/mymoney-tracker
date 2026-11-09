@@ -20,7 +20,7 @@
     {% include "base/_field.html" with field=form.email %}
     {% include "base/_field.html" with field=form.password1 %}
     {% include "base/_field.html" with field=form.password2 %}
-    <button type="submit" {% if not registration_open %}disabled{% endif %} class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg py-2.5">Create account</button>
+    <button type="submit" id="submit-btn" {% if not registration_open %}disabled{% endif %} class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg py-2.5">Create account</button>
   </form>
   <p class="text-center text-sm text-slate-500 mt-6">
     Already have an account? <a href="{% url 'users:login' %}" class="text-brand-600 font-medium">Log in</a>

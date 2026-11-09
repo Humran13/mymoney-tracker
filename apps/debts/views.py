@@ -50,13 +50,13 @@ def borrowing_create(request):
 def borrowing_detail(request, pk):
     borrowing = get_object_or_404(Borrowing, pk=pk, user=request.user)
     if request.method == "POST":
-        form = BorrowingRepaymentForm(request.POST, user=request.user)
+        form = BorrowingRepaymentForm(request.POST, user=request.user, borrowing=borrowing)
         if form.is_valid():
             services.record_borrowing_repayment(user=request.user, borrowing=borrowing, **form.cleaned_data)
             messages.success(request, "Repayment recorded.")
             return redirect("debts:borrowing_detail", pk=pk)
     else:
-        form = BorrowingRepaymentForm(user=request.user, initial={"date": timezone.localdate()})
+        form = BorrowingRepaymentForm(user=request.user, borrowing=borrowing, initial={"date": timezone.localdate()})
     return render(request, "debts/borrowing_detail.html", {"borrowing": borrowing, "form": form})
 
 
@@ -88,13 +88,13 @@ def lending_create(request):
 def lending_detail(request, pk):
     lending = get_object_or_404(Lending, pk=pk, user=request.user)
     if request.method == "POST":
-        form = LendingRepaymentForm(request.POST, user=request.user)
+        form = LendingRepaymentForm(request.POST, user=request.user, lending=lending)
         if form.is_valid():
             services.record_lending_repayment(user=request.user, lending=lending, **form.cleaned_data)
             messages.success(request, "Repayment received recorded.")
             return redirect("debts:lending_detail", pk=pk)
     else:
-        form = LendingRepaymentForm(user=request.user, initial={"date": timezone.localdate()})
+        form = LendingRepaymentForm(user=request.user, lending=lending, initial={"date": timezone.localdate()})
     return render(request, "debts/lending_detail.html", {"lending": lending, "form": form})
 
 

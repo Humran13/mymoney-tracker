@@ -2,7 +2,7 @@
 {% load money %}
 {% block title %}{{ lending.borrower_name }} · {{ APP_NAME }}{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
   <h1 class="text-xl font-semibold">{{ lending.borrower_name }}</h1>
   <a href="{% url 'debts:lending_delete' lending.pk %}" class="text-sm text-red-600">Delete</a>
 </div>
@@ -28,7 +28,7 @@
       {% include "base/_field.html" with field=form.date %}
       {% include "base/_field.html" with field=form.receiving_account %}
       {% include "base/_field.html" with field=form.notes %}
-      <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Record repayment</button>
+      <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Record repayment</button>
     </form>
   </div>
   <div>

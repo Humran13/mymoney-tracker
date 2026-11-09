@@ -1,6 +1,17 @@
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import *  # noqa: F401,F403
 
 DEBUG = False
+
+# Fail loudly at startup rather than silently running production on the
+# insecure dev default — this is the one setting that must never be the
+# fallback outside local development.
+if SECRET_KEY == "insecure-dev-key-change-me":  # noqa: F405
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY is not set (or still the insecure dev default). "
+        "Set a real secret in your .env file before running with prod settings."
+    )
 
 # Caddy terminates TLS and proxies to Gunicorn over plain HTTP, setting
 # X-Forwarded-Proto. Without this, request.is_secure() is always False
@@ -31,6 +42,21 @@ X_FRAME_OPTIONS = "DENY"
 
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])  # noqa: F405
 
-EMAIL_BACKEND = env("DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")  # noqa: F405
-
 AXES_ENABLED = True
+
+# -------- Email (password reset, future notifications) --------
+# Defaults to the console backend so the app still runs without any SMTP
+# provider configured; set SMTP_HOST (and friends) in .env to send real
+# email. Never hardcode credentials — they only ever come from the
+# environment.
+if env("SMTP_HOST", default=""):  # noqa: F405
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = env("SMTP_HOST")  # noqa: F405
+    EMAIL_PORT = env.int("SMTP_PORT", default=587)  # noqa: F405
+    EMAIL_HOST_USER = env("SMTP_USERNAME", default="")  # noqa: F405
+    EMAIL_HOST_PASSWORD = env("SMTP_PASSWORD", default="")  # noqa: F405
+    EMAIL_USE_TLS = env.bool("SMTP_USE_TLS", default=True)  # noqa: F405
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="MyMoney Tracker <noreply@localhost>")  # noqa: F405

@@ -82,14 +82,14 @@ class SelfDeactivationReactivationTests(TestCase):
 
 class AdminPanelAccessTests(TestCase):
     def test_staff_user_can_access_admin_panel(self):
-        staff = User.objects.create_user(email="staff@example.com", password="StrongPass123!", is_staff=True)
+        User.objects.create_user(email="staff@example.com", password="StrongPass123!", is_staff=True)
         self.client.login(email="staff@example.com", password="StrongPass123!")
         response = self.client.get(reverse("adminpanel:dashboard"))
         self.assertEqual(response.status_code, 200)
 
     def test_admin_suspend_blocks_login(self):
         target = User.objects.create_user(email="suspend@example.com", password="StrongPass123!")
-        staff = User.objects.create_user(email="staff2@example.com", password="StrongPass123!", is_staff=True)
+        User.objects.create_user(email="staff2@example.com", password="StrongPass123!", is_staff=True)
         self.client.login(email="staff2@example.com", password="StrongPass123!")
         self.client.post(reverse("adminpanel:user_suspend", args=[target.pk]))
         self.client.logout()

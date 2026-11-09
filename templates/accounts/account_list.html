@@ -2,7 +2,7 @@
 {% load money %}
 {% block title %}Accounts · {{ APP_NAME }}{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between mb-4">
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
   <h1 class="text-xl font-semibold">Financial Accounts</h1>
   <div class="flex gap-2">
     <a href="{% url 'accounts:transfer_create' %}" class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Transfer money</a>

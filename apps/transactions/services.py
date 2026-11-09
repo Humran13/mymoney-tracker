@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django.db import transaction as db_transaction
 from django.db.models import Count, Max
 

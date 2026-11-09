@@ -1,0 +1,9 @@
+[tool.ruff]
+line-length = 120
+exclude = [".venv", "node_modules", "migrations"]
+
+[tool.ruff.lint]
+# Deliberately narrow: real errors (E9) and pyflakes (F) — undefined names,
+# unused imports/variables, etc. Not a style enforcer; this project doesn't
+# gate CI on formatting opinions, only on things that are actually bugs.
+select = ["E9", "F"]

@@ -21,6 +21,12 @@ class BorrowingForm(forms.ModelForm):
             user=user, status=FinancialAccount.Status.ACTIVE
         )
 
+    def clean_amount(self):
+        value = self.cleaned_data["amount"]
+        if value <= 0:
+            raise forms.ValidationError("Amount borrowed must be greater than zero.")
+        return value
+
 
 class BorrowingRepaymentForm(forms.ModelForm):
     class Meta:
@@ -28,8 +34,9 @@ class BorrowingRepaymentForm(forms.ModelForm):
         fields = ["amount", "date", "paying_account", "notes"]
         widgets = {"date": forms.DateInput(attrs={"type": "date"})}
 
-    def __init__(self, *args, user=None, **kwargs):
+    def __init__(self, *args, user=None, borrowing=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.borrowing = borrowing
         self.fields["paying_account"].queryset = FinancialAccount.objects.filter(
             user=user, status=FinancialAccount.Status.ACTIVE
         )
@@ -38,6 +45,10 @@ class BorrowingRepaymentForm(forms.ModelForm):
         value = self.cleaned_data["amount"]
         if value <= 0:
             raise forms.ValidationError("Repayment amount must be greater than zero.")
+        if self.borrowing is not None and value > self.borrowing.outstanding():
+            raise forms.ValidationError(
+                f"That's more than the {self.borrowing.outstanding()} still outstanding on this borrowing."
+            )
         return value
 
 
@@ -57,6 +68,12 @@ class LendingForm(forms.ModelForm):
             user=user, status=FinancialAccount.Status.ACTIVE
         )
 
+    def clean_amount(self):
+        value = self.cleaned_data["amount"]
+        if value <= 0:
+            raise forms.ValidationError("Amount lent must be greater than zero.")
+        return value
+
 
 class LendingRepaymentForm(forms.ModelForm):
     class Meta:
@@ -64,8 +81,9 @@ class LendingRepaymentForm(forms.ModelForm):
         fields = ["principal_amount", "interest_amount", "date", "receiving_account", "notes"]
         widgets = {"date": forms.DateInput(attrs={"type": "date"})}
 
-    def __init__(self, *args, user=None, **kwargs):
+    def __init__(self, *args, user=None, lending=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.lending = lending
         self.fields["receiving_account"].queryset = FinancialAccount.objects.filter(
             user=user, status=FinancialAccount.Status.ACTIVE
         )
@@ -76,4 +94,8 @@ class LendingRepaymentForm(forms.ModelForm):
         interest = cleaned.get("interest_amount") or 0
         if principal <= 0 and interest <= 0:
             raise forms.ValidationError("Enter a principal and/or interest amount received.")
+        if self.lending is not None and principal > self.lending.outstanding():
+            raise forms.ValidationError(
+                f"That's more principal than the {self.lending.outstanding()} still owed on this lending."
+            )
         return cleaned

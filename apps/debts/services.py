@@ -35,6 +35,10 @@ def delete_borrowing(borrowing: Borrowing):
 
 @db_transaction.atomic
 def record_borrowing_repayment(*, user, borrowing: Borrowing, **fields) -> BorrowingRepayment:
+    if fields.get("amount") and fields["amount"] > borrowing.outstanding():
+        raise ValueError(
+            f"Repayment of {fields['amount']} exceeds the {borrowing.outstanding()} still outstanding."
+        )
     repayment = BorrowingRepayment.objects.create(user=user, borrowing=borrowing, **fields)
     sync_postings(
         repayment,
@@ -95,6 +99,11 @@ def delete_lending(lending: Lending):
 
 @db_transaction.atomic
 def record_lending_repayment(*, user, lending: Lending, **fields) -> LendingRepayment:
+    principal = fields.get("principal_amount") or 0
+    if principal and principal > lending.outstanding():
+        raise ValueError(
+            f"Principal repayment of {principal} exceeds the {lending.outstanding()} still owed."
+        )
     repayment = LendingRepayment.objects.create(user=user, lending=lending, **fields)
     specs = []
     if repayment.principal_amount:

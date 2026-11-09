@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  [x-cloak] {
+    display: none !important;
+  }
+}
+
+@layer base {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  select,
+  textarea {
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid rgb(203 213 225);
+    padding: 0.5rem 0.75rem;
+    background: white;
+    color: inherit;
+  }
+
+  .dark input[type="text"],
+  .dark input[type="email"],
+  .dark input[type="password"],
+  .dark input[type="number"],
+  .dark input[type="date"],
+  .dark select,
+  .dark textarea {
+    background: rgb(30 41 59);
+    border-color: rgb(71 85 105);
+  }
+
+  input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+  }
+}

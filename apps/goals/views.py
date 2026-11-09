@@ -1,5 +1,3 @@
-import datetime
-
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -9,7 +7,7 @@ from apps.accounts.services import total_cash_on_hand
 from apps.core.audit import log_audit_event
 
 from . import services
-from .forms import GoalAllocationForm, SavingsGoalForm
+from .forms import GoalAllocationForm, GoalScenarioForm, SavingsGoalForm
 from .models import SavingsGoal
 
 
@@ -82,11 +80,25 @@ def goal_detail(request, pk):
         form = GoalAllocationForm(initial={"date": timezone.localdate()})
 
     forecast = services.forecast_goal(goal)
-    target_calc = services.savings_target_calculator(goal, deadline=request.GET.get("deadline") and datetime.date.fromisoformat(request.GET["deadline"]))
+    target_calc = services.savings_target_calculator(goal)
+
+    scenario_form = GoalScenarioForm(request.GET or None)
+    scenario = None
+    if request.GET and scenario_form.is_valid():
+        scenario = services.goal_scenario(
+            goal,
+            reduce_expense_monthly=scenario_form.cleaned_data.get("reduce_expense_monthly"),
+            increase_income_monthly=scenario_form.cleaned_data.get("increase_income_monthly"),
+            deadline=scenario_form.cleaned_data.get("deadline"),
+        )
+
     return render(
         request,
         "goals/goal_detail.html",
-        {"goal": goal, "form": form, "forecast": forecast, "target_calc": target_calc},
+        {
+            "goal": goal, "form": form, "forecast": forecast, "target_calc": target_calc,
+            "scenario_form": scenario_form, "scenario": scenario,
+        },
     )
 
 
@@ -111,5 +123,6 @@ def goal_archive(request, pk):
 
 @login_required
 def required_income(request):
-    result = services.required_income_calculator(request.user)
-    return render(request, "goals/required_income.html", {"result": result})
+    extend_months = int(request.GET.get("extend_months", 0) or 0)
+    result = services.required_income_calculator(request.user, deadline_extension_months=extend_months)
+    return render(request, "goals/required_income.html", {"result": result, "extend_months": extend_months})

@@ -34,5 +34,22 @@
   {% endif %}
   <p class="text-xs text-slate-400 mt-2">Based on the last {{ result.history_days }} days of recorded activity. This is an estimate, not a guarantee.</p>
 </div>
+
+<div class="mt-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+  <h2 class="font-semibold mb-1">Scenario: extend every goal's deadline</h2>
+  <p class="text-xs text-slate-500 mb-3">Hypothetical only — doesn't change any goal's actual deadline.</p>
+  <form method="get" class="flex gap-2 items-end flex-wrap">
+    <div>
+      <label for="extend_months" class="block text-sm font-medium mb-1">Push deadlines back by (months)</label>
+      <input id="extend_months" type="number" name="extend_months" value="{{ extend_months }}" title="Months to extend" min="0" max="120" class="!w-32">
+    </div>
+    <button type="submit" class="px-4 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm">Recalculate</button>
+  </form>
+  {% if extend_months %}
+  <p class="text-sm mt-3">With deadlines pushed back {{ extend_months }} month(s): required monthly savings
+    <strong>{{ result.required_monthly_savings|money }}</strong>, required monthly income
+    <strong>{{ result.required_monthly_income|money }}</strong>.</p>
+  {% endif %}
+</div>
 {% endif %}
 {% endblock %}

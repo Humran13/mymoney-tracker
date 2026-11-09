@@ -1,0 +1,16 @@
+{% comment %} Shared nav links — included by both the desktop sidebar and the mobile drawer so they can never drift apart. {% endcomment %}
+<a href="{% url 'dashboard:home' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Dashboard</a>
+<a href="{% url 'accounts:list' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Accounts</a>
+<a href="{% url 'transactions:list' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Transactions</a>
+<a href="{% url 'debts:dashboard' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Debts &amp; Loans</a>
+<a href="{% url 'bills:list' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Recurring Bills</a>
+<a href="{% url 'closing:today' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Daily Closing</a>
+<a href="{% url 'budgets:list' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Budgets</a>
+<a href="{% url 'goals:list' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Goals</a>
+<a href="{% url 'reports:monthly' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Reports</a>
+<div class="pt-3 mt-3 border-t border-slate-200 dark:border-slate-700">
+  <a href="{% url 'users:settings' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Settings</a>
+  {% if user.is_staff %}
+  <a href="{% url 'adminpanel:dashboard' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Admin Panel</a>
+  {% endif %}
+</div>

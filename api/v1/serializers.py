@@ -192,7 +192,10 @@ class BorrowingRepaymentSerializer(ScopedFieldsMixin, serializers.ModelSerialize
 
         validated_data["user"] = self.context["request"].user
         borrowing = validated_data.pop("borrowing")
-        return record_borrowing_repayment(borrowing=borrowing, **validated_data)
+        try:
+            return record_borrowing_repayment(borrowing=borrowing, **validated_data)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
 
 
 class LendingSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
@@ -232,7 +235,10 @@ class LendingRepaymentSerializer(ScopedFieldsMixin, serializers.ModelSerializer)
 
         validated_data["user"] = self.context["request"].user
         lending = validated_data.pop("lending")
-        return record_lending_repayment(lending=lending, **validated_data)
+        try:
+            return record_lending_repayment(lending=lending, **validated_data)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
 
 
 class RecurringBillSerializer(ScopedFieldsMixin, serializers.ModelSerializer):

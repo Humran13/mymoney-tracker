@@ -10,7 +10,7 @@
     {% include "base/_field.html" with field=form.bill_reminder_days_ahead %}
     {% include "base/_field.html" with field=form.default_account %}
     <label class="flex items-center gap-2 mb-4 text-sm">{{ form.notifications_enabled }} Enable in-app reminders</label>
-    <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save settings</button>
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save settings</button>
   </form>
 </div>
 {% endblock %}

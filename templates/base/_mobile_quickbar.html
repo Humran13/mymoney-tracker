@@ -1,0 +1,5 @@
+{% comment %} Always-reachable quick-add bar on mobile — recording an ordinary expense should never require opening the nav drawer first. {% endcomment %}
+<div class="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex gap-2 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+  <a href="{% url 'transactions:create' %}?kind=income" class="flex-1 text-center py-3 rounded-xl border border-green-300 text-green-700 font-medium text-sm">+ Income</a>
+  <a href="{% url 'transactions:create' %}?kind=expense" class="flex-1 text-center py-3 rounded-xl bg-brand-600 text-white font-medium text-sm">+ Expense</a>
+</div>

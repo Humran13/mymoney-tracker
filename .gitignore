@@ -1,13 +1,27 @@
 .venv/
+node_modules/
+static/css/tailwind.css
 __pycache__/
 *.pyc
 *.sqlite3
+*.sql
+
+# Secrets / local config — .env.example is the only env file ever tracked.
 .env
+.env.*
+!.env.example
+
+# Persistent storage bind mounts (real data, never shipped in the repo).
+data/
 staticfiles/
 media/
-backups/*.sql
+backups/
+
+# Test/build artifacts.
 .pytest_cache/
 .coverage
 htmlcov/
+test-results/
+playwright-report/
 *.log
 .DS_Store

@@ -2,7 +2,8 @@
 {% load money %}
 {% block title %}Dashboard · {{ APP_NAME }}{% endblock %}
 {% block extra_head %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js"></script>
+{% load static %}
+<script src="{% static 'js/chart.umd.min.js' %}"></script>
 {% endblock %}
 {% block content %}
 
@@ -41,9 +42,11 @@
 </div>
 
 <div class="grid lg:grid-cols-3 gap-6">
-  <div class="lg:col-span-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+  <div class="lg:col-span-2 min-w-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
     <h2 class="font-semibold mb-3">Spending trend (last 6 months)</h2>
-    <canvas id="trendChart" height="110"></canvas>
+    <div class="relative w-full min-w-0 overflow-hidden" style="height: 110px;">
+      <canvas id="trendChart" class="!max-w-full"></canvas>
+    </div>
   </div>
   <div class="space-y-4">
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
@@ -95,7 +98,12 @@
         fill: true,
       }]
     },
-    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } },
+    }
   });
 </script>
 {% endblock %}

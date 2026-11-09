@@ -15,14 +15,22 @@ because an earlier, more naive version of this code failed a test. Read
 
 ```bash
 source .venv/Scripts/activate      # venv already exists at .venv/
-pytest                              # full test suite, runs against SQLite — no Postgres needed
+pytest tests/ --ignore=tests/e2e    # unit/integration suite, runs against SQLite — no Postgres needed
+pytest tests/e2e/ --browser chromium  # real-browser suite (also: firefox, webkit)
 python manage.py runserver          # needs a real Postgres; see README for local setup
 python manage.py check               # fast sanity check, no DB needed
+npm run build:css                   # rebuild static/css/tailwind.css after ANY template class change
 ```
 
 `config/settings/test.py` (SQLite) is test-only. Dev and prod always use
 PostgreSQL — don't "fix" a test failure by making production code
 SQLite-specific.
+
+**If you change a template's Tailwind classes, run `npm run build:css`
+before testing.** The compiled stylesheet only contains classes Tailwind
+saw at build time — a class added to a template has zero effect until
+rebuilt. This bit Phase 9 once (a layout fix silently did nothing until
+caught by the mobile E2E test) — don't repeat it.
 
 ## The one thing to understand before touching money code
 
@@ -51,16 +59,28 @@ directly, and don't add a new "current_balance" field anywhere.
 
 ## Tests
 
-`tests/` is organized by feature, not by app:
+`tests/` (unit/integration, SQLite) is organized by feature, not by app:
 - `test_accounts_and_fees.py` — ledger correctness, mobile money fees, Decimal precision
-- `test_debts.py` — borrowing/lending, partial repayment, carry-forward
+- `test_debts.py` / `test_financial_edge_cases.py` — borrowing/lending, partial repayment, carry-forward, overpayment guards, zero/negative amounts, race conditions
 - `test_bills_budgets_goals.py` — duplicate-payment prevention, budget %, forecast guardrails
+- `test_goal_scenarios.py` — the "what if" scenario calculator (reduce spending / increase income / change deadline / combined)
 - `test_isolation.py` — cross-user access, web + API
-- `test_registration_and_admin.py` — registration, suspension, admin actions
+- `test_security.py` — CSRF, login rate limiting (axes), JWT validation
+- `test_registration_and_admin.py` — registration, suspension, admin actions, password reset
 - `test_smoke.py` — every major page renders; add new URLs here when you add a page
 
-Run `pytest -q` before considering any change to `apps/accounts`,
-`apps/transactions`, `apps/debts`, or `apps/goals` done.
+`tests/e2e/` (Playwright, real Chromium/Firefox/WebKit) drives the actual
+rendered app, not just Django's test client — this is what catches
+template-rendering bugs and CSS/JS layout bugs the unit suite structurally
+can't see. `tests/e2e/conftest.py`'s `submit_and_wait()` helper exists
+because `page.click() + wait_for_load_state("networkidle")` is unreliable
+in WebKit specifically for a click that triggers a navigation — use it (or
+wrap in `expect_navigation()`) for any new E2E test that submits a form.
+
+Run `pytest tests/ --ignore=tests/e2e -q` before considering any change to
+`apps/accounts`, `apps/transactions`, `apps/debts`, or `apps/goals` done;
+add a `tests/e2e/test_mobile_viewports_e2e.py` case too if the change
+touches a template's layout.
 
 ## Known rough edges
 

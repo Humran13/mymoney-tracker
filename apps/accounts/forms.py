@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import FinancialAccount, Transfer
+from .models import FinancialAccount
 
 
 class FinancialAccountForm(forms.ModelForm):

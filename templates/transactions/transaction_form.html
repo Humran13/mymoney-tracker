@@ -18,7 +18,7 @@
         </div>
         {% include "base/_field.html" with field=form.description %}
         {% include "base/_field.html" with field=form.notes %}
-        <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save</button>
+        <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save</button>
       </form>
     </div>
   </div>
@@ -36,7 +36,9 @@
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
       <p class="text-xs font-semibold text-slate-500 uppercase mb-2">Recent</p>
       {% for r in recent %}
-      <p class="text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">{{ r.description|default:r.category.name }} — {{ r.amount|money }}</p>
+      <p class="text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+        {% if r.description %}{{ r.description }}{% elif r.category %}{{ r.category.name }}{% else %}Uncategorized{% endif %} — {{ r.amount|money }}
+      </p>
       {% endfor %}
     </div>
     {% endif %}

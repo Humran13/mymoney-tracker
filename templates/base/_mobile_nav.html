@@ -1,0 +1,21 @@
+{% comment %} Mobile nav drawer. State (mobileNavOpen) lives on the authenticated-shell wrapper in base.html so the hamburger button in _topbar.html and this drawer can share it. {% endcomment %}
+<div x-show="mobileNavOpen" x-cloak class="md:hidden fixed inset-0 z-40">
+  <div class="absolute inset-0 bg-black/40" @click="mobileNavOpen = false"></div>
+  <nav
+    id="mobile-nav-drawer"
+    x-show="mobileNavOpen"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="-translate-x-full"
+    x-transition:enter-end="translate-x-0"
+    class="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-white dark:bg-slate-800 shadow-xl flex flex-col"
+    @click.outside="mobileNavOpen = false"
+  >
+    <div class="h-16 flex items-center justify-between gap-2 px-5 border-b border-slate-200 dark:border-slate-700">
+      <span class="text-brand-600 dark:text-brand-500 text-xl font-bold">MyMoney Tracker</span>
+      <button @click="mobileNavOpen = false" class="p-2 -mr-2 text-slate-400" aria-label="Close menu">✕</button>
+    </div>
+    <div class="flex-1 overflow-y-auto py-4 px-2 space-y-1" @click="mobileNavOpen = false">
+      {% include "base/_nav_links.html" %}
+    </div>
+  </nav>
+</div>

@@ -7,12 +7,20 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-mymoney}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # A bind mount, not a named volume: POSTGRES_DATA_DIR is meant to sit
+      # under the CloudPanel site user's own home directory so it's covered
+      # by whatever backs up that directory, and so "docker compose down"
+      # (without -v) or an image rebuild can never silently orphan it the
+      # way a named volume could if someone later runs `docker volume prune`.
+      - ${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mymoney}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    # Never published to the host — reachable only from other containers on
+    # this compose network. Postgres is not exposed publicly under any
+    # deployment mode.
 
   web:
     build: .
@@ -28,7 +36,10 @@ services:
         condition: service_healthy
     volumes:
       - media_data:/app/media
-      - backup_data:/app/backups
+      # Bind-mounted for the same reason as POSTGRES_DATA_DIR above: backup
+      # archives need to live somewhere a CloudPanel (or any host-level)
+      # backup routine actually reaches.
+      - ${POSTGRES_BACKUP_DIR:-./backups}:/app/backups
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
       interval: 15s
@@ -37,10 +48,24 @@ services:
       start_period: 20s
     expose:
       - "8000"
+    ports:
+      # Bound to loopback only — safe to leave set in every deployment mode.
+      # A standalone deployment reaches this container via the "caddy"
+      # service's internal docker-network hostname instead (not this
+      # binding); a CloudPanel deployment points its site's reverse proxy
+      # at 127.0.0.1:${APP_PORT:-8001} since CloudPanel's own proxy terminates
+      # the public connection and already handles HTTPS.
+      - "127.0.0.1:${APP_PORT:-8001}:8000"
 
+  # Only started for a standalone Docker+Caddy deployment (no CloudPanel):
+  #   docker compose --profile standalone up -d
+  # Omit --profile standalone when CloudPanel's own reverse proxy and
+  # certificate management already handle the public-facing side — running
+  # this too would fight CloudPanel for ports 80/443.
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    profiles: ["standalone"]
     ports:
       - "80:80"
       - "443:443"
@@ -54,8 +79,6 @@ services:
       - web
 
 volumes:
-  postgres_data:
   media_data:
-  backup_data:
   caddy_data:
   caddy_config:
