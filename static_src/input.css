@@ -39,4 +39,16 @@
     width: 1rem;
     height: 1rem;
   }
+
+  /* Unstyled <input type="file">'s native "Choose file / no file chosen"
+     rendering has no intrinsic width cap in some browsers at narrow
+     viewports, overflowing its container (same class of bug as an
+     unstyled canvas breaking out of a CSS Grid cell — see DECISIONS.md).
+     max-width stops it from ever exceeding its container; width:100% on
+     a block element then has it actually fill that space. */
+  input[type="file"] {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+  }
 }
