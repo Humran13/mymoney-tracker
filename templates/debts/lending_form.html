@@ -1,6 +1,7 @@
 {% extends "base/base.html" %}
 {% block title %}Lend money · {{ APP_NAME }}{% endblock %}
 {% block content %}
+{% include "base/_back_link.html" with back_url_name="debts:dashboard" guard_unsaved=True %}
 <h1 class="text-xl font-semibold mb-4">Lend money to someone</h1>
 <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
   <form method="post" novalidate>

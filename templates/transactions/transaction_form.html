@@ -4,6 +4,7 @@
 {% block content %}
 <div class="grid lg:grid-cols-3 gap-6">
   <div class="lg:col-span-2">
+    {% include "base/_back_link.html" with back_url_name="transactions:list" guard_unsaved=True %}
     <h1 class="text-xl font-semibold mb-4">{% if mode == "edit" %}Edit transaction{% else %}Add transaction{% endif %}</h1>
     <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
       <form method="post" novalidate>

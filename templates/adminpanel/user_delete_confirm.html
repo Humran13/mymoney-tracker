@@ -1,6 +1,7 @@
 {% extends "base/base.html" %}
 {% block title %}Delete user · Admin · {{ APP_NAME }}{% endblock %}
 {% block content %}
+{% include "base/_back_link.html" with back_url_name="adminpanel:user_detail" back_url_arg=target.pk %}
 <h1 class="text-xl font-semibold mb-4 text-red-700">Permanently delete {{ target.email }}?</h1>
 <div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 p-6 max-w-lg">
   <p class="text-sm mb-4">This permanently erases this user's account and all of their financial data. This cannot be undone.</p>

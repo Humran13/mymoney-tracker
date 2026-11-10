@@ -1,6 +1,7 @@
 {% extends "base/base.html" %}
 {% block title %}Delete lending · {{ APP_NAME }}{% endblock %}
 {% block content %}
+{% include "base/_back_link.html" with back_url_name="debts:lending_detail" back_url_arg=lending.pk %}
 <h1 class="text-xl font-semibold mb-4">Delete this lending record?</h1>
 <div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 p-6 max-w-lg">
   <p class="text-sm mb-4">This removes the lending to {{ lending.borrower_name }} and all its repayments, and recalculates affected account balances.</p>

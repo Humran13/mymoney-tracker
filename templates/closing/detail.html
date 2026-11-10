@@ -2,6 +2,7 @@
 {% load money %}
 {% block title %}Daily Closing · {{ date }} · {{ APP_NAME }}{% endblock %}
 {% block content %}
+{% include "base/_back_link.html" with back_url_name="closing:history" %}
 <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
   <div class="flex items-center gap-3">
     <a href="{% url 'closing:detail' prev_date.isoformat %}" class="text-slate-400">&larr;</a>

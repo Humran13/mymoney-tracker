@@ -1,6 +1,7 @@
 {% extends "base/base.html" %}
 {% block title %}{{ target.email }} · Admin · {{ APP_NAME }}{% endblock %}
 {% block content %}
+{% include "base/_back_link.html" with back_url_name="adminpanel:user_list" %}
 <h1 class="text-xl font-semibold mb-4">{{ target.email }}</h1>
 {% include "adminpanel/_nav.html" %}
 

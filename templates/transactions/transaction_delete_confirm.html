@@ -2,6 +2,7 @@
 {% load money %}
 {% block title %}Delete transaction · {{ APP_NAME }}{% endblock %}
 {% block content %}
+{% include "base/_back_link.html" with back_url_name="transactions:list" %}
 <h1 class="text-xl font-semibold mb-4">Delete this transaction?</h1>
 <div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 p-6 max-w-lg">
   <p class="text-sm mb-4">{{ txn.get_kind_display }} of {{ txn.amount|money }} on {{ txn.date }} — {{ txn.description }}</p>
