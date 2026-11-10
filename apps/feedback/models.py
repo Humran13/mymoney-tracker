@@ -13,10 +13,26 @@ from apps.core.models import UserOwnedModel
 # they live somewhere nothing but feedback.views.attachment ever reads from,
 # and base_url=None means accidentally rendering `.screenshot.url` in a
 # template raises loudly instead of leaking a guessable public path.
-private_screenshot_storage = FileSystemStorage(
-    location=str(settings.BASE_DIR / "private_media" / "feedback_screenshots"),
-    base_url=None,
-)
+#
+# A custom deconstruct() is required here: FileSystemStorage's default one
+# serializes the resolved `location` string as-is into migration files. Since
+# BASE_DIR differs per machine (e.g. D:\mymoney-tracker on a Windows dev box
+# vs /app in the Linux container), that would freeze one environment's
+# absolute path into the migration forever, causing makemigrations to see
+# phantom drift on every other environment. Returning no kwargs means the
+# migration only ever records "use this storage class" — location is
+# recomputed fresh from BASE_DIR wherever it actually runs.
+class PrivateScreenshotStorage(FileSystemStorage):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("location", str(settings.BASE_DIR / "private_media" / "feedback_screenshots"))
+        kwargs.setdefault("base_url", None)
+        super().__init__(*args, **kwargs)
+
+    def deconstruct(self):
+        return ("apps.feedback.models.PrivateScreenshotStorage", [], {})
+
+
+private_screenshot_storage = PrivateScreenshotStorage()
 
 MAX_SCREENSHOT_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
