@@ -10,6 +10,7 @@ from apps.core.models import TimeStampedModel, UserOwnedModel, money_field
 class FinancialAccount(UserOwnedModel):
     class AccountType(models.TextChoices):
         CASH = "cash", "Cash Wallet"
+        CASH_SAFE = "cash_safe", "Cash Safe"
         BANK = "bank", "Bank Account"
         MOBILE_MONEY_MTN = "mobile_money_mtn", "MTN Mobile Money"
         MOBILE_MONEY_AIRTEL = "mobile_money_airtel", "Airtel Money"
@@ -24,6 +25,18 @@ class FinancialAccount(UserOwnedModel):
     account_type = models.CharField(max_length=30, choices=AccountType.choices, default=AccountType.CASH)
     currency_code = models.CharField(max_length=3, default="UGX")
     opening_balance = money_field(default=0)
+    opening_balance_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "The date the opening balance above was actually true. Postings dated on or "
+            "after this date are added to the opening balance to get the current balance; "
+            "postings dated before it are historical record only and do not affect the "
+            "balance (they are already accounted for in the opening balance itself). "
+            "Leave blank for an account with no cutoff — every posting ever recorded "
+            "affects its balance (the pre-existing behavior)."
+        ),
+    )
     description = models.CharField(max_length=255, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
 

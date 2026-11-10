@@ -64,7 +64,7 @@ def account_create(request):
             messages.success(request, f"Account '{account.name}' created.")
             return redirect("accounts:list")
     else:
-        form = FinancialAccountForm()
+        form = FinancialAccountForm(initial={"opening_balance_date": timezone.localdate()})
     return render(request, "accounts/account_form.html", {"form": form, "mode": "create"})
 
 

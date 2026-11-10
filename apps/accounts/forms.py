@@ -8,8 +8,11 @@ from .models import FinancialAccount
 class FinancialAccountForm(forms.ModelForm):
     class Meta:
         model = FinancialAccount
-        fields = ["name", "account_type", "opening_balance", "description"]
-        widgets = {"opening_balance": forms.NumberInput(attrs={"step": "0.01", "min": "0"})}
+        fields = ["name", "account_type", "opening_balance", "opening_balance_date", "description"]
+        widgets = {
+            "opening_balance": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
+            "opening_balance_date": forms.DateInput(attrs={"type": "date"}),
+        }
 
     def clean_opening_balance(self):
         value = self.cleaned_data["opening_balance"]
