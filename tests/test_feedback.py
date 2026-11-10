@@ -7,8 +7,6 @@ secure attachment serving (owner + staff only, never a raw public path --
 see apps/feedback/models.py for why screenshots live outside MEDIA_ROOT).
 """
 
-import io
-
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse

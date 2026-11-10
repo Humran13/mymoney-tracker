@@ -7,14 +7,13 @@ pattern is used everywhere else too (see templates/base/_back_link.html).
 
 from decimal import Decimal
 
-from apps.accounts.models import FinancialAccount
 from apps.debts.services import create_borrowing
 
 
 def test_back_link_on_account_form_returns_to_account_list(signed_in_page, live_server):
     page, user, account = signed_in_page
     page.goto(f"{live_server.url}/accounts/new/")
-    back = page.get_by_role("link", name="Back")
+    back = page.get_by_role("link", name="Back", exact=True)
     assert back.is_visible()
     back.click()
     page.wait_for_load_state("networkidle")
@@ -24,7 +23,7 @@ def test_back_link_on_account_form_returns_to_account_list(signed_in_page, live_
 def test_back_link_on_transaction_form_returns_to_transaction_list(signed_in_page, live_server):
     page, user, account = signed_in_page
     page.goto(f"{live_server.url}/transactions/new/")
-    back = page.get_by_role("link", name="Back")
+    back = page.get_by_role("link", name="Back", exact=True)
     assert back.is_visible()
     back.click()
     page.wait_for_load_state("networkidle")
@@ -38,7 +37,7 @@ def test_back_link_on_borrowing_detail_returns_to_debts_dashboard(signed_in_page
         date_borrowed="2026-01-01", receiving_account=account,
     )
     page.goto(f"{live_server.url}/debts/borrowings/{borrowing.pk}/")
-    back = page.get_by_role("link", name="Back")
+    back = page.get_by_role("link", name="Back", exact=True)
     assert back.is_visible()
     back.click()
     page.wait_for_load_state("networkidle")
@@ -54,7 +53,7 @@ def test_back_link_warns_before_discarding_unsaved_form_input(signed_in_page, li
 
     dialog_seen = []
     page.once("dialog", lambda dialog: (dialog_seen.append(dialog.message), dialog.dismiss()))
-    page.get_by_role("link", name="Back").click()
+    page.get_by_role("link", name="Back", exact=True).click()
     page.wait_for_timeout(200)
 
     assert dialog_seen, "expected a confirm() dialog warning about unsaved changes"

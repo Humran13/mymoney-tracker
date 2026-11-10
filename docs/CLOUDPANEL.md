@@ -29,9 +29,9 @@ This guide covers the CloudPanel-managed mode.
 
 ## Why bind mounts, not named Docker volumes
 
-`POSTGRES_DATA_DIR` and `POSTGRES_BACKUP_DIR` (see `.env.example`) are bind
-mounts to real host paths, not Docker named volumes. This matters for two
-reasons:
+`POSTGRES_DATA_DIR`, `POSTGRES_BACKUP_DIR`, and `PRIVATE_MEDIA_DIR` (see
+`.env.example`) are bind mounts to real host paths, not Docker named
+volumes. This matters for two reasons:
 
 1. **CloudPanel's backup routine backs up a site's own directory tree** —
    files under `/home/<site-user>/...`. A Docker named volume lives under
@@ -101,6 +101,9 @@ Fill in, at minimum:
 - `POSTGRES_PASSWORD` — a strong password
 - `POSTGRES_DATA_DIR=$APP_DEPLOY_DIR/data/postgres`
 - `POSTGRES_BACKUP_DIR=$APP_DEPLOY_DIR/backups/postgres`
+- `PRIVATE_MEDIA_DIR=$APP_DEPLOY_DIR/private_media` (Phase 11+: Help &
+  Feedback screenshot attachments — see `apps/feedback/models.py` for why
+  these intentionally don't live under the regular media/static paths)
 - `APP_PORT` — pick a free localhost port if `8001` is already used by
   another site on this VPS (**[VPS-ONLY]**: check `sudo ss -tlnp | grep 8001`)
 - SMTP settings, if you have a provider; otherwise leave blank (console
@@ -274,8 +277,8 @@ docker compose exec web python manage.py check
 - **Never** `docker compose down -v` — that removes named volumes (and
   combined with bind-mount removal commands, could threaten data); this
   flow only ever restarts/recreates the `web` service.
-- **Never** deletes or recreates `$POSTGRES_DATA_DIR` or
-  `$POSTGRES_BACKUP_DIR`.
+- **Never** deletes or recreates `$POSTGRES_DATA_DIR`,
+  `$POSTGRES_BACKUP_DIR`, or `$PRIVATE_MEDIA_DIR`.
 - **Never** runs `migrate` with `--fake` or skips reviewing a migration
   that looks like it could be destructive (dropping a column/table) before
   applying it to real data — read the migration file first if unsure.

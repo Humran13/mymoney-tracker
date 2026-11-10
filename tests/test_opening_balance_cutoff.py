@@ -17,12 +17,7 @@ from django.test import TestCase
 
 from apps.accounts.models import FinancialAccount
 from apps.accounts.services import account_balance, bulk_account_balances, create_transfer
-from apps.debts.services import (
-    create_borrowing,
-    create_lending,
-    record_borrowing_repayment,
-    record_lending_repayment,
-)
+from apps.debts.services import create_borrowing, create_lending, record_lending_repayment
 from apps.transactions.services import create_transaction, update_transaction
 from apps.users.models import User
 
