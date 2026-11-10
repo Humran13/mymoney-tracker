@@ -8,6 +8,7 @@
 <a href="{% url 'budgets:list' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Budgets</a>
 <a href="{% url 'goals:list' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Goals</a>
 <a href="{% url 'reports:monthly' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Reports</a>
+<a href="{% url 'feedback:list' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Help &amp; Feedback</a>
 <div class="pt-3 mt-3 border-t border-slate-200 dark:border-slate-700">
   <a href="{% url 'users:settings' %}" class="block px-3 py-2.5 rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700 text-base md:text-sm">Settings</a>
   {% if user.is_staff %}

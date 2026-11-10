@@ -15,6 +15,7 @@ __pycache__/
 data/
 staticfiles/
 media/
+private_media/
 backups/
 
 # Test/build artifacts.

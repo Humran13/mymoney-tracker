@@ -1,0 +1,17 @@
+{% extends "base/base.html" %}
+{% block title %}Help & Feedback · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="feedback:list" guard_unsaved=True %}
+<h1 class="text-xl font-semibold mb-4">Report a problem, suggest something, or ask for help</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    {% include "base/_field.html" with field=form.category %}
+    {% include "base/_field.html" with field=form.subject %}
+    {% include "base/_field.html" with field=form.description %}
+    {% include "base/_field.html" with field=form.screenshot %}
+    <p class="text-xs text-slate-500 mb-3">Optional. PNG, JPG, or WEBP, up to 5&nbsp;MB.</p>
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Submit</button>
+  </form>
+</div>
+{% endblock %}

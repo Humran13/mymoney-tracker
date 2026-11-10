@@ -1,0 +1,29 @@
+{% extends "base/base.html" %}
+{% block title %}{{ submission.subject }} · Feedback · Admin · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="adminpanel:feedback_list" %}
+<h1 class="text-xl font-semibold mb-1">{{ submission.subject }}</h1>
+<p class="text-sm text-slate-500 mb-4">{{ submission.get_category_display }} · from {{ submission.user.email }} · {{ submission.created_at|date:"d M Y, H:i" }}</p>
+
+<div class="grid lg:grid-cols-2 gap-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-2">Submission</h2>
+    <p class="text-sm whitespace-pre-wrap mb-3">{{ submission.description }}</p>
+    {% if submission.screenshot %}
+    <a href="{% url 'feedback:attachment' submission.pk %}" class="text-sm text-brand-600 font-medium">View attached screenshot</a>
+    {% endif %}
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Respond</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% include "base/_field.html" with field=form.status %}
+      {% include "base/_field.html" with field=form.admin_response %}
+      <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save response</button>
+    </form>
+    {% if submission.responded_at %}
+    <p class="text-xs text-slate-500 mt-3">Last responded by {{ submission.responded_by.email }} on {{ submission.responded_at|date:"d M Y, H:i" }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

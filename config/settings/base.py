@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "apps.goals",
     "apps.reports",
     "apps.adminpanel",
+    "apps.feedback",
     "api",
 ]
 

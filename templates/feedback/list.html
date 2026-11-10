@@ -1,0 +1,43 @@
+{% extends "base/base.html" %}
+{% block title %}Help & Feedback · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+  <h1 class="text-xl font-semibold">Help &amp; Feedback</h1>
+  <a href="{% url 'feedback:create' %}" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-4 py-2 text-sm">New submission</a>
+</div>
+
+<div class="flex gap-2 mb-4 text-sm overflow-x-auto">
+  <a href="?" class="px-3 py-1.5 rounded-full border {% if not category %}bg-brand-600 text-white border-brand-600{% else %}border-slate-300 dark:border-slate-600{% endif %}">All</a>
+  {% for value, label in categories %}
+  <a href="?category={{ value }}" class="px-3 py-1.5 rounded-full border whitespace-nowrap {% if category == value %}bg-brand-600 text-white border-brand-600{% else %}border-slate-300 dark:border-slate-600{% endif %}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<div class="space-y-2">
+  {% for s in page %}
+  <a href="{% url 'feedback:detail' s.pk %}" class="block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 hover:border-brand-300">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <p class="font-medium">{{ s.subject }}</p>
+        <p class="text-xs text-slate-500">{{ s.get_category_display }} · {{ s.created_at|date:"d M Y" }}</p>
+      </div>
+      <span class="text-xs rounded-full px-3 py-1
+        {% if s.status == 'resolved' %}bg-green-50 text-green-700 border border-green-200
+        {% elif s.status == 'in_progress' %}bg-amber-50 text-amber-700 border border-amber-200
+        {% else %}bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-700 dark:text-slate-300{% endif %}">
+        {{ s.get_status_display }}
+      </span>
+    </div>
+  </a>
+  {% empty %}
+  <p class="text-slate-500 text-sm">No submissions yet. Found a problem, have an idea, or need help? Use "New submission" above.</p>
+  {% endfor %}
+</div>
+
+{% if page.has_other_pages %}
+<div class="flex gap-2 mt-4 text-sm">
+  {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}{% if category %}&category={{ category }}{% endif %}" class="text-brand-600">Previous</a>{% endif %}
+  {% if page.has_next %}<a href="?page={{ page.next_page_number }}{% if category %}&category={{ category }}{% endif %}" class="text-brand-600">Next</a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -40,6 +40,11 @@ services:
       # archives need to live somewhere a CloudPanel (or any host-level)
       # backup routine actually reaches.
       - ${POSTGRES_BACKUP_DIR:-./backups}:/app/backups
+      # Feedback screenshots (apps/feedback) live outside MEDIA_ROOT on
+      # purpose -- see the comment in apps/feedback/models.py -- but still
+      # need a persistent mount or they'd vanish on every container
+      # recreate. Bind-mounted, same rationale as the two mounts above.
+      - ${PRIVATE_MEDIA_DIR:-./private_media}:/app/private_media
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
       interval: 15s

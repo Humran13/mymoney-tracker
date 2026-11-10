@@ -76,6 +76,8 @@ class SmokePageLoadTests(TestCase):
         self._assert_ok(reverse("users:profile"))
         self._assert_ok(reverse("users:settings"))
         self._assert_ok(reverse("health_check"))
+        self._assert_ok(reverse("feedback:list"))
+        self._assert_ok(reverse("feedback:create"))
 
     def test_admin_pages_render_for_staff(self):
         self.user.is_staff = True
@@ -87,3 +89,4 @@ class SmokePageLoadTests(TestCase):
         self._assert_ok(reverse("adminpanel:site_settings"))
         self._assert_ok(reverse("adminpanel:system_health"))
         self._assert_ok(reverse("adminpanel:backups"))
+        self._assert_ok(reverse("adminpanel:feedback_list"))

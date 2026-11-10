@@ -17,4 +17,6 @@ urlpatterns = [
     path("health/", views.system_health, name="system_health"),
     path("backups/", views.backups_view, name="backups"),
     path("backups/trigger/", views.backups_trigger, name="backups_trigger"),
+    path("feedback/", views.feedback_list, name="feedback_list"),
+    path("feedback/<int:pk>/", views.feedback_detail, name="feedback_detail"),
 ]

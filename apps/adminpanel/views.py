@@ -8,11 +8,15 @@ from django.core.paginator import Paginator
 from django.db import connection
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from apps.core.audit import log_audit_event
 from apps.core.models import AuditEvent
 from apps.core.user_deletion import delete_user_and_all_data
 from apps.users.models import User
+
+from apps.feedback.forms import AdminFeedbackResponseForm
+from apps.feedback.models import FeedbackSubmission
 
 from .forms import SiteConfigurationForm
 from .models import SiteConfiguration
@@ -172,3 +176,49 @@ def backups_trigger(request):
         except Exception as exc:  # pragma: no cover - environment dependent
             messages.error(request, f"Backup failed: {exc}")
     return redirect("adminpanel:backups")
+
+
+@_require_staff
+def feedback_list(request):
+    submissions = FeedbackSubmission.objects.select_related("user").all()
+    category = request.GET.get("category", "")
+    status = request.GET.get("status", "")
+    if category:
+        submissions = submissions.filter(category=category)
+    if status:
+        submissions = submissions.filter(status=status)
+    paginator = Paginator(submissions, 25)
+    page = paginator.get_page(request.GET.get("page"))
+    return render(
+        request,
+        "adminpanel/feedback_list.html",
+        {
+            "page": page,
+            "category": category,
+            "status": status,
+            "categories": FeedbackSubmission.Category.choices,
+            "statuses": FeedbackSubmission.Status.choices,
+        },
+    )
+
+
+@_require_staff
+def feedback_detail(request, pk):
+    submission = get_object_or_404(FeedbackSubmission.objects.select_related("user"), pk=pk)
+    if request.method == "POST":
+        form = AdminFeedbackResponseForm(request.POST, instance=submission)
+        if form.is_valid():
+            submission = form.save(commit=False)
+            submission.responded_by = request.user
+            submission.responded_at = timezone.now()
+            submission.save()
+            log_audit_event(
+                request.user, "admin_action", obj=submission,
+                description=f"Responded to feedback #{submission.pk} from {submission.user.email}",
+                request=request,
+            )
+            messages.success(request, "Response saved.")
+            return redirect("adminpanel:feedback_detail", pk=pk)
+    else:
+        form = AdminFeedbackResponseForm(instance=submission)
+    return render(request, "adminpanel/feedback_detail.html", {"submission": submission, "form": form})
