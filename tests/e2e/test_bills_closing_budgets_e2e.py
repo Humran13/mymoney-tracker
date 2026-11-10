@@ -36,11 +36,13 @@ def test_daily_closing_close_and_reopen(signed_in_page, live_server):
     page.wait_for_load_state("networkidle")
     assert "Open" in page.content()
 
-    page.click('button[name="action"][value="close"]')
+    with page.expect_navigation():
+        page.click('button[name="action"][value="close"]')
     page.wait_for_load_state("networkidle")
     assert "Closed" in page.content()
 
-    page.click('button[name="action"][value="reopen"]')
+    with page.expect_navigation():
+        page.click('button[name="action"][value="reopen"]')
     page.wait_for_load_state("networkidle")
     assert "Open" in page.content()
 
