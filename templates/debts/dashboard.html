@@ -28,10 +28,10 @@
       {% for b in borrowings %}
       <a href="{% url 'debts:borrowing_detail' b.pk %}" class="block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 {% if b.is_overdue %}border-red-300{% endif %}">
         <div class="flex justify-between">
-          <p class="font-medium">{{ b.lender_name }}</p>
+          <p class="font-medium">{{ b.lender_name }} <span class="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{ b.get_debt_type_display }}</span></p>
           <p class="font-bold">{{ b.outstanding|money }}</p>
         </div>
-        <p class="text-xs text-slate-500">Borrowed {{ b.amount|money }} on {{ b.date_borrowed }}{% if b.due_date %} · due {{ b.due_date }}{% endif %}
+        <p class="text-xs text-slate-500">{{ b.amount|money }} on {{ b.date_borrowed }}{% if b.due_date %} · due {{ b.due_date }}{% endif %}
           {% if b.is_overdue %}<span class="text-red-600 font-medium">· OVERDUE</span>{% endif %}</p>
       </a>
       {% empty %}

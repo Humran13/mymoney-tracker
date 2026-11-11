@@ -59,6 +59,8 @@ class SmokePageLoadTests(TestCase):
         self._assert_ok(reverse("transactions:template_list"))
         self._assert_ok(reverse("debts:dashboard"))
         self._assert_ok(reverse("debts:borrowing_detail", args=[self.borrowing.pk]))
+        self._assert_ok(reverse("debts:borrowing_create"))
+        self._assert_ok(reverse("debts:borrowing_reclassify", args=[self.borrowing.pk]))
         self._assert_ok(reverse("debts:lending_detail", args=[self.lending.pk]))
         self._assert_ok(reverse("bills:list"))
         self._assert_ok(reverse("bills:pay", args=[self.bill.pk]))

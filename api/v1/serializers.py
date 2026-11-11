@@ -162,13 +162,23 @@ class BorrowingSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = Borrowing
         fields = [
-            "id", "lender_name", "amount", "date_borrowed", "receiving_account",
+            "id", "debt_type", "lender_name", "amount", "date_borrowed", "receiving_account",
             "due_date", "interest_amount", "notes", "status", "outstanding",
         ]
         read_only_fields = ["id", "status"]
 
     def get_outstanding(self, obj):
         return obj.outstanding()
+
+    def validate(self, attrs):
+        debt_type = attrs.get("debt_type", Borrowing.DebtType.CASH_LOAN)
+        if debt_type == Borrowing.DebtType.CASH_LOAN and not attrs.get("receiving_account"):
+            raise serializers.ValidationError(
+                {"receiving_account": "A cash loan requires the account that received the money."}
+            )
+        if debt_type != Borrowing.DebtType.CASH_LOAN:
+            attrs["receiving_account"] = None
+        return attrs
 
     def create(self, validated_data):
         from apps.debts.services import create_borrowing

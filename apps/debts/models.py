@@ -6,17 +6,38 @@ from apps.core.models import UserOwnedModel, money_field
 
 
 class Borrowing(UserOwnedModel):
-    """Money the user borrowed from someone else. The principal increases a
-    real account balance but is never counted as income."""
+    """Something the user owes someone else. Only a CASH_LOAN actually puts
+    money into one of the user's accounts — goods/services received on
+    credit (or any other noncash obligation) increase what's owed without
+    ever touching cash, so they must never get a BORROW_RECEIVE posting."""
+
+    class DebtType(models.TextChoices):
+        CASH_LOAN = "cash_loan", "Cash Loan"
+        GOODS_CREDIT = "goods_credit", "Goods on Credit"
+        SERVICES_CREDIT = "services_credit", "Services on Credit"
+        OTHER = "other", "Other Money Owed"
 
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
         SETTLED = "settled", "Settled"
 
-    lender_name = models.CharField(max_length=150)
+    debt_type = models.CharField(
+        max_length=20,
+        choices=DebtType.choices,
+        default=DebtType.CASH_LOAN,
+        help_text="Cash Loan is the only type that actually deposits money into an account.",
+    )
+    lender_name = models.CharField(max_length=150, help_text="Lender, supplier, or creditor.")
     amount = money_field()
     date_borrowed = models.DateField()
-    receiving_account = models.ForeignKey("accounts.FinancialAccount", on_delete=models.PROTECT, related_name="borrowings")
+    receiving_account = models.ForeignKey(
+        "accounts.FinancialAccount",
+        on_delete=models.PROTECT,
+        related_name="borrowings",
+        null=True,
+        blank=True,
+        help_text="Required for a Cash Loan only — the account the money actually landed in.",
+    )
     due_date = models.DateField(null=True, blank=True)
     interest_amount = money_field(default=0, help_text="Total interest owed in addition to the principal, if any.")
     notes = models.TextField(blank=True)

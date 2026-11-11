@@ -23,8 +23,8 @@
 <div class="grid lg:grid-cols-2 gap-6 mb-6">
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
     <h2 class="font-semibold mb-3">Balances</h2>
-    <div class="flex justify-between text-sm py-1"><span>Opening balance</span><span>{{ report.opening_balance|money }}</span></div>
-    <div class="flex justify-between text-sm py-1"><span>Closing balance</span><span>{{ report.closing_balance|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Opening balance</span><span>{% if report.opening_balance is None %}<span class="text-slate-400 italic">Unavailable before opening date</span>{% else %}{{ report.opening_balance|money }}{% endif %}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Closing balance</span><span>{% if report.closing_balance is None %}<span class="text-slate-400 italic">Unavailable before opening date</span>{% else %}{{ report.closing_balance|money }}{% endif %}</span></div>
   </div>
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
     <h2 class="font-semibold mb-3">Debts &amp; Loans</h2>

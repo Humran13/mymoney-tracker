@@ -8,7 +8,7 @@ from django.utils import timezone
 from apps.core.audit import log_audit_event
 
 from . import services
-from .forms import BorrowingForm, BorrowingRepaymentForm, LendingForm, LendingRepaymentForm
+from .forms import BorrowingForm, BorrowingReclassifyForm, BorrowingRepaymentForm, LendingForm, LendingRepaymentForm
 from .models import Borrowing, Lending
 
 
@@ -58,6 +58,35 @@ def borrowing_detail(request, pk):
     else:
         form = BorrowingRepaymentForm(user=request.user, borrowing=borrowing, initial={"date": timezone.localdate()})
     return render(request, "debts/borrowing_detail.html", {"borrowing": borrowing, "form": form})
+
+
+@login_required
+def borrowing_reclassify(request, pk):
+    borrowing = get_object_or_404(Borrowing, pk=pk, user=request.user)
+    if request.method == "POST":
+        form = BorrowingReclassifyForm(request.POST, user=request.user)
+        if form.is_valid():
+            debt_type = form.cleaned_data["debt_type"]
+            receiving_account = form.cleaned_data.get("receiving_account")
+            if request.POST.get("confirm") == "1":
+                services.reclassify_borrowing(
+                    borrowing=borrowing, debt_type=debt_type, receiving_account=receiving_account
+                )
+                log_audit_event(request.user, "update", obj=borrowing, description="Reclassified debt type")
+                messages.success(request, "Debt type updated.")
+                return redirect("debts:borrowing_detail", pk=pk)
+            preview = services.preview_reclassify_borrowing(borrowing, debt_type, receiving_account)
+            return render(
+                request,
+                "debts/borrowing_reclassify.html",
+                {"borrowing": borrowing, "form": form, "preview": preview, "confirming": True},
+            )
+    else:
+        form = BorrowingReclassifyForm(
+            user=request.user,
+            initial={"debt_type": borrowing.debt_type, "receiving_account": borrowing.receiving_account},
+        )
+    return render(request, "debts/borrowing_reclassify.html", {"borrowing": borrowing, "form": form, "confirming": False})
 
 
 @login_required

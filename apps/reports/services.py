@@ -108,6 +108,7 @@ def compute_monthly_report(user, year, month):
         "largest_categories": list(by_category[:5]),
         "opening_balance": balance_as_of(user, prev_month_end),
         "closing_balance": balance_as_of(user, end),
+        "balance_unavailable": balance_as_of(user, prev_month_end) is None or balance_as_of(user, end) is None,
         "money_borrowed": borrowed_this_month,
         "money_lent": lent_this_month,
         "loan_repayments_paid": borrowing_repayments,

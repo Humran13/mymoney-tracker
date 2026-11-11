@@ -8,7 +8,7 @@ from .models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
 class BorrowingForm(forms.ModelForm):
     class Meta:
         model = Borrowing
-        fields = ["lender_name", "amount", "date_borrowed", "receiving_account", "due_date", "interest_amount", "notes"]
+        fields = ["debt_type", "lender_name", "amount", "date_borrowed", "receiving_account", "due_date", "interest_amount", "notes"]
         widgets = {
             "date_borrowed": forms.DateInput(attrs={"type": "date"}),
             "due_date": forms.DateInput(attrs={"type": "date"}),
@@ -17,6 +17,7 @@ class BorrowingForm(forms.ModelForm):
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["receiving_account"].required = False
         self.fields["receiving_account"].queryset = FinancialAccount.objects.filter(
             user=user, status=FinancialAccount.Status.ACTIVE
         )
@@ -26,6 +27,32 @@ class BorrowingForm(forms.ModelForm):
         if value <= 0:
             raise forms.ValidationError("Amount borrowed must be greater than zero.")
         return value
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("debt_type") == Borrowing.DebtType.CASH_LOAN:
+            if not cleaned.get("receiving_account"):
+                self.add_error("receiving_account", "A cash loan requires the account that received the money.")
+        else:
+            cleaned["receiving_account"] = None
+        return cleaned
+
+
+class BorrowingReclassifyForm(forms.Form):
+    debt_type = forms.ChoiceField(choices=Borrowing.DebtType.choices)
+    receiving_account = forms.ModelChoiceField(queryset=FinancialAccount.objects.none(), required=False)
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["receiving_account"].queryset = FinancialAccount.objects.filter(
+            user=user, status=FinancialAccount.Status.ACTIVE
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("debt_type") == Borrowing.DebtType.CASH_LOAN and not cleaned.get("receiving_account"):
+            self.add_error("receiving_account", "A cash loan requires the account that received the money.")
+        return cleaned
 
 
 class BorrowingRepaymentForm(forms.ModelForm):

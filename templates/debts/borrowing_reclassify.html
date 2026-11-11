@@ -1,0 +1,49 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Change debt type · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="debts:borrowing_detail" back_url_arg=borrowing.pk %}
+<h1 class="text-xl font-semibold mb-4">Change debt type for {{ borrowing.lender_name }}</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <p class="text-sm text-slate-500 mb-4">
+    Currently classified as <strong>{{ borrowing.get_debt_type_display }}</strong>.
+    Changing this preserves the creditor, amount, dates, and every repayment —
+    only the account posting is adjusted.
+  </p>
+
+  {% if confirming %}
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm">
+    <p class="font-medium mb-2">Preview of balance changes:</p>
+    {% for account, delta in preview.items %}
+    <p>{{ account.name }}: {% if delta >= 0 %}+{% endif %}{{ delta|money }}</p>
+    {% empty %}
+    <p>No account balances will change.</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "base/_field.html" with field=form.debt_type %}
+    <div id="receivingAccountField">
+      {% include "base/_field.html" with field=form.receiving_account %}
+    </div>
+    {% if confirming %}
+    <input type="hidden" name="confirm" value="1">
+    <button type="submit" id="submit-btn" class="bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg px-5 py-2.5">Confirm change</button>
+    <a href="{% url 'debts:borrowing_detail' borrowing.pk %}" class="ml-2 text-sm text-slate-500">Cancel</a>
+    {% else %}
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Preview change</button>
+    {% endif %}
+  </form>
+</div>
+<script>
+  const debtTypeField = document.getElementById('{{ form.debt_type.id_for_label }}');
+  const receivingAccountField = document.getElementById('receivingAccountField');
+  function toggleReceivingAccount() {
+    receivingAccountField.classList.toggle('hidden', debtTypeField.value !== 'cash_loan');
+  }
+  debtTypeField.addEventListener('change', toggleReceivingAccount);
+  toggleReceivingAccount();
+</script>
+{% endblock %}

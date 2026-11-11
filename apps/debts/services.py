@@ -6,23 +6,58 @@ from apps.accounts.services import delete_postings, sync_postings
 from .models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
 
 
+def _borrowing_postings(borrowing: Borrowing) -> list:
+    """Only a CASH_LOAN ever creates a real cash-deposit posting. Goods/
+    services/other credit obligations increase what's owed (via
+    outstanding()/total_owed(), which read the model fields directly, not
+    postings) without ever touching an account balance."""
+    if borrowing.debt_type != Borrowing.DebtType.CASH_LOAN:
+        return []
+    return [
+        dict(
+            account=borrowing.receiving_account,
+            amount=borrowing.amount,
+            source_type=AccountPosting.SourceType.BORROW_RECEIVE,
+            occurred_on=borrowing.date_borrowed,
+            description=f"Borrowed from {borrowing.lender_name}",
+        )
+    ]
+
+
 @db_transaction.atomic
 def create_borrowing(*, user, **fields) -> Borrowing:
     borrowing = Borrowing.objects.create(user=user, **fields)
-    sync_postings(
-        borrowing,
-        [
-            dict(
-                account=borrowing.receiving_account,
-                amount=borrowing.amount,
-                source_type=AccountPosting.SourceType.BORROW_RECEIVE,
-                occurred_on=borrowing.date_borrowed,
-                description=f"Borrowed from {borrowing.lender_name}",
-            )
-        ],
-        user=user,
-    )
+    sync_postings(borrowing, _borrowing_postings(borrowing), user=user)
     return borrowing
+
+
+@db_transaction.atomic
+def reclassify_borrowing(*, borrowing: Borrowing, debt_type, receiving_account=None) -> Borrowing:
+    """Change a debt's type (e.g. a cash loan that was actually goods
+    received on credit). Preserves the record, its creditor, amount, dates,
+    and every repayment — only the BORROW_RECEIVE posting is added/removed
+    through the normal sync_postings path, and account balances recompute
+    from that automatically."""
+    borrowing.debt_type = debt_type
+    borrowing.receiving_account = receiving_account if debt_type == Borrowing.DebtType.CASH_LOAN else None
+    borrowing.full_clean()
+    borrowing.save(update_fields=["debt_type", "receiving_account"])
+    sync_postings(borrowing, _borrowing_postings(borrowing), user=borrowing.user)
+    return borrowing
+
+
+def preview_reclassify_borrowing(borrowing: Borrowing, debt_type, receiving_account=None) -> dict:
+    """Read-only: what balance changes reclassify_borrowing() would cause,
+    computed without writing anything, so the UI can show it before the
+    user confirms."""
+    from decimal import Decimal
+
+    changes = {}
+    if borrowing.debt_type == Borrowing.DebtType.CASH_LOAN and borrowing.receiving_account_id:
+        changes[borrowing.receiving_account] = changes.get(borrowing.receiving_account, Decimal("0.00")) - borrowing.amount
+    if debt_type == Borrowing.DebtType.CASH_LOAN and receiving_account is not None:
+        changes[receiving_account] = changes.get(receiving_account, Decimal("0.00")) + borrowing.amount
+    return changes
 
 
 @db_transaction.atomic

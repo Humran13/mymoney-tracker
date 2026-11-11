@@ -8,17 +8,27 @@ from apps.accounts.models import AccountPosting, FinancialAccount
 
 def balance_as_of(user, date):
     """Total balance across active accounts, counting only postings dated
-    on or before `date` — used to reconstruct a historical day's opening
-    and closing position without storing a mutable snapshot."""
-    accounts = FinancialAccount.objects.filter(user=user, status=FinancialAccount.Status.ACTIVE)
-    opening_total = sum((a.opening_balance for a in accounts), Decimal("0.00"))
-    posted = (
-        AccountPosting.objects.filter(user=user, account__in=accounts, occurred_on__lte=date).aggregate(
-            total=Sum("amount")
-        )["total"]
-        or Decimal("0.00")
-    )
-    return opening_total + posted
+    on or before `date` and respecting each account's own opening-balance
+    cutoff — used to reconstruct a historical day's opening and closing
+    position without storing a mutable snapshot.
+
+    Returns None if `date` falls before any active account's
+    opening_balance_date: the opening_balance figure is only known to be
+    true as of that cutoff, so any total computed for an earlier date would
+    either double-count pre-cutoff postings already baked into
+    opening_balance, or invent a number that was never actually recorded.
+    Callers must show "balance unavailable" rather than a 0 or a guess."""
+    accounts = list(FinancialAccount.objects.filter(user=user, status=FinancialAccount.Status.ACTIVE))
+    if any(a.opening_balance_date and date < a.opening_balance_date for a in accounts):
+        return None
+    total = Decimal("0.00")
+    for account in accounts:
+        postings = AccountPosting.objects.filter(user=user, account=account, occurred_on__lte=date)
+        if account.opening_balance_date is not None:
+            postings = postings.filter(occurred_on__gte=account.opening_balance_date)
+        posted = postings.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        total += account.opening_balance + posted
+    return total
 
 
 def day_breakdown(user, date):
@@ -32,9 +42,12 @@ def day_breakdown(user, date):
         (-v for k, v in totals.items() if k in (AccountPosting.SourceType.EXPENSE, AccountPosting.SourceType.FEE, AccountPosting.SourceType.LEND_SEND, AccountPosting.SourceType.BORROW_REPAY, AccountPosting.SourceType.TRANSFER_OUT, AccountPosting.SourceType.BILL_PAYMENT)),
         Decimal("0.00"),
     )
+    opening_balance = balance_as_of(user, date - timedelta(days=1))
+    closing_balance = balance_as_of(user, date)
     return {
-        "opening_balance": balance_as_of(user, date - timedelta(days=1)),
-        "closing_balance": balance_as_of(user, date),
+        "opening_balance": opening_balance,
+        "closing_balance": closing_balance,
+        "balance_unavailable": opening_balance is None or closing_balance is None,
         "received": received,
         "spent": spent,
         "net": received - spent,
