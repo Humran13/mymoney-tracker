@@ -1,10 +1,67 @@
 # Phase 11 Handoff
 
-**Last updated:** 2026-11-10, same session that did the work below.
+**Last updated:** 2026-11-11 — a later session deployed this phase to
+production. Sections below from 2026-11-10 are left as-is (historical
+record of the dev work); this note plus the inline updates mark what
+changed once real VPS/DB access was available.
 **For:** whichever assistant (Claude Code, DeepSeek, or a human) picks this up next.
 Read this before touching the code — it tells you exactly what's done, what
 isn't, and the one thing you must not skip (production DB access is blocked
 for the account this session had).
+
+## 0. 2026-11-11 deployment update (read this first)
+
+- **Fixed before deploying:** `apps/feedback/migrations/0001_initial.py` had
+  baked in the dev machine's absolute Windows path
+  (`D:\mymoney-tracker\private_media\feedback_screenshots`) via
+  `FileSystemStorage`'s default `deconstruct()`. Fixed with a custom
+  `PrivateScreenshotStorage.deconstruct()` in `apps/feedback/models.py` that
+  returns no location kwarg, regenerated the migration (same filename, never
+  applied anywhere before this). Commit `e266e85`.
+- **Found by CI, fixed before deploying:** the feedback form overflowed
+  horizontally at 360px — `input[type="file"]` had no width rule in
+  `static_src/input.css`. Fixed, rebuilt `static/css/tailwind.css`. Commit
+  `904f0d5`.
+- **Pushed to GitHub.** `origin/master` head is now `904f0d5`. CI green on
+  all 5 jobs (verified via `gh run view --json status,conclusion,jobs`, not
+  the watch command's own exit code — see the project's CI lesson about
+  that).
+- **Deployed to production** (https://money.therealworldboosts.com).
+  Backed up the production database first and verified the backup by
+  restoring it into an isolated throwaway database and checking exact row
+  counts and the real account balances matched before touching anything.
+  Pulled `904f0d5` as the site user (fast-forward only), added
+  `PRIVATE_MEDIA_DIR` to the server's `.env` (34 existing lines untouched),
+  rebuilt and restarted only the `web` service. `db` container was never
+  restarted; all other unrelated VPS services (`daily_figures_app`,
+  `spidqah-collections-app-*`, `hbbr`, `hbbs`) confirmed healthy before and
+  after.
+- **Migrations applied for real**, confirmed via container logs:
+  `accounts.0003_financialaccount_opening_balance_date_and_more` and
+  `feedback.0001_initial`. Re-checked immediately after: every real
+  account's `opening_balance` is byte-for-byte unchanged, and the new
+  `opening_balance_date` column is `NULL` on all of them (expected — the
+  migration is additive-only, exactly as section 7 below predicted).
+- **Verified live, with a disposable test account (created and then fully
+  deleted via `delete_user_and_all_data()` afterward — no real user data
+  touched)**: Cash Safe account type selectable, `opening_balance_date`
+  field present on the account form, back links present, feedback
+  submission + screenshot upload works, and — the one with real security
+  weight — a **second** disposable account and an **anonymous** request
+  were both correctly denied access to the first account's screenshot
+  attachment (redirected to login / blocked), while the owning account
+  could fetch it fine.
+- **Registration stays disabled, correctly.** Checked the live container's
+  actual environment: `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_HOST_USER`, and
+  `EMAIL_HOST_PASSWORD` are all unset in production. SMTP is confirmed not
+  configured — this isn't inherited from the 2026-11-10 note below, it was
+  independently re-checked this session. Public registration must stay off
+  until that changes; nothing was flipped.
+- **Still pending the owner's explicit approval, untouched by this
+  session**: the real "Wallet & Safe" account's `opening_balance_date` /
+  historical split (section 13, items 1–2) — this session deployed the
+  *capability* to set them, not the actual values, per the owner's own
+  instruction not to touch that row without sign-off.
 
 ## 1. Project description and architecture
 
