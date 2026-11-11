@@ -59,9 +59,42 @@ for the account this session had).
   until that changes; nothing was flipped.
 - **Still pending the owner's explicit approval, untouched by this
   session**: the real "Wallet & Safe" account's `opening_balance_date` /
-  historical split (section 13, items 1–2) — this session deployed the
+  historical split (section 13, items 1-2) - this session deployed the
   *capability* to set them, not the actual values, per the owner's own
   instruction not to touch that row without sign-off.
+
+## 16. 2026-11-11 (later same day) - Improvement #6: customizable spending-trend chart
+
+Separate request, deployed after the above. Replaced the dashboard's fixed
+"last 6 months" spending chart with a period selector covering 7/30 days,
+3/6/12 months, this year, last year, all time, and a custom date range.
+Bucketing (day/month/year) is chosen automatically from the span; zero-
+spending buckets are always included, never skipped. Selection is scoped to
+request.user only and persisted on UserProfile (dashboard_trend_period,
+dashboard_trend_start/end) so it is remembered on the next visit. See
+apps/dashboard/services.py::spending_trend() and the dashboard:trend_data
+AJAX endpoint in apps/dashboard/views.py. Chart.js instance, colors, and the
+rest of the dashboard layout are untouched.
+
+- Commit 3ef09fe, pushed to origin/master, CI green on all 5 jobs.
+- 16 new unit tests plus 4 new E2E tests added; full suite re-run clean
+  (107 unit, 156 E2E across chromium/firefox/webkit).
+- Migration users.0002_userprofile_dashboard_trend_end_and_more applied in
+  production - purely additive (three nullable/defaulted fields).
+- Deployed after a fresh backup (verified via isolated-database restore,
+  exact row counts and all 5 real account balances checked before being
+  trusted, then dropped). Pulled as the site user via fast-forward only,
+  rebuilt and restarted only the web service; db was never restarted.
+- Verified live with a disposable test account (created, exercised, then
+  fully deleted): default period, period switching, custom range,
+  persistence across reload, and no mobile overflow with the custom-range
+  picker open - all checks passed.
+- Real balances re-confirmed unchanged after the migration, matching the
+  pre-deployment backup exactly. Note: WALLET and SAFE already exist as two
+  separate accounts in production - the Wallet/Safe split referenced in
+  section 13 appears to have already happened outside this session;
+  nothing here touched that.
+- All other VPS services confirmed healthy before and after, untouched.
 
 ## 1. Project description and architecture
 
