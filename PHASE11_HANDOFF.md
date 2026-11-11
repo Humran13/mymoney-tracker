@@ -404,3 +404,95 @@ docker compose up -d --build web
    session did — don't let it go stale.
 5. No production passwords, keys, or secrets are written here, on
    purpose. None should be.
+
+## 16. Phase 12 - Debt Classification, Credit Purchases, Opening-Balance Cutoff (deployed)
+
+**Code:** commits `a8f8bb3` (feature), `c537c6c` (lint fix). Pushed to
+`origin/master`, CI green on all 5 jobs (test, lint, frontend-build,
+docker-build, dependency-audit) at run 42958733331.
+
+**What changed:**
+- `Borrowing.debt_type` (new field, default `cash_loan`): Cash Loan,
+  Goods on Credit, Services on Credit, Other Money Owed. Only Cash Loan
+  creates a `BORROW_RECEIVE` posting - the other three increase what's
+  owed without ever touching an account balance. `receiving_account` is
+  now nullable at the DB level, with form- and API-serializer-level
+  validation enforcing "cash loan requires it, others clear it."
+- `reclassify_borrowing()` / `preview_reclassify_borrowing()`
+  (`apps/debts/services.py`) plus a preview-then-confirm UI
+  (`/debts/borrowings/<pk>/reclassify/`) let an owner safely move an
+  existing borrowing between types, re-syncing its posting atomically
+  and showing the balance delta before it's applied. Nothing does this
+  automatically - every existing Borrowing stays `cash_loan` unless a
+  human explicitly reclassifies it.
+- `apps/closing/services.py::balance_as_of()` now returns `None` (shown
+  as "Balance unavailable before opening date") instead of a guessed
+  number for any date before an active account's `opening_balance_date`,
+  and respects that cutoff consistently with `account_balance()`. Fixed
+  in `day_breakdown()` and propagated to `apps/reports/services.py`'s
+  monthly report.
+- Migration `debts/0003_borrowing_debt_type_...`: adds `debt_type` with
+  a default (no backfill needed) and relaxes `receiving_account` to
+  nullable. Purely additive/loosening - confirmed via `git show` review
+  before applying to production, no data rewrite.
+- 29 new regression tests (`tests/test_debt_classification.py`,
+  including the exact Tasha Cargo 446,000 / 100k+200k+146k repayment
+  scenario and the exact WALLET 631,200 / Nov 9 historical-cutoff
+  scenario from the brief) plus 2 new E2E tests and 1 new mobile-overflow
+  test. Full suite green locally before push.
+
+**Deployment (2026-11-11, production):**
+1. SSH key-based auth set up for this session (previous root-password
+   approach retired at the owner's request); the owner installed the
+   session's public key into `/root/.ssh/authorized_keys` and fixed its
+   ownership/permissions.
+2. Confirmed all 7 containers on the VPS healthy before touching
+   anything (`mymoney-tracker-web-1`, `-db-1`, plus the two unrelated
+   `daily_figures_app`/`spidqah-collections` apps and `hbbr`/`hbbs`).
+3. Took a fresh `pg_dump` backup
+   (`pre_phase12_20261111_174334.sql`, 125KB, `chmod 600`, owned by the
+   site user) before any change.
+4. Restored that backup into an isolated `verify_restore` database and
+   compared row counts + `sum(amount)` across `users_user`,
+   `accounts_financialaccount`, `accounts_accountposting`,
+   `debts_borrowing`, `debts_borrowingrepayment` against the live DB -
+   exact match (posting sum -572,500.00 both sides). Dropped
+   `verify_restore` afterward.
+5. Reviewed the migration file via `git show origin/master:...` before
+   merging - confirmed additive/nullable-only, no destructive op.
+6. `git merge --ff-only origin/master` as the site user (3ef09fe ->
+   c537c6c), `docker compose build web`, `docker compose up -d --no-deps
+   web`. Migration applied cleanly in the entrypoint log
+   (`Applying debts.0003_..._OK`). `db` service was never touched.
+7. Post-deploy: container healthy, `/health/` returns
+   `{"status": "ok", "database": true}` (HTTP 200).
+8. Compared real production financial data before vs. after: identical
+   row counts and posting sum. The real Tasha Cargo borrowing is
+   unchanged - still `cash_loan`, `receiving_account_id=6`, amount
+   446,000.00 - confirming the deploy did not auto-reclassify anything.
+9. Verified the new features live using one disposable test account
+   (`phase12_verify@example.com`): a Goods-on-Credit borrowing left the
+   account balance untouched; three repayments (100k, 200k, 146k) across
+   the same account settled it to exactly zero outstanding with the
+   expected final balance; `preview_reclassify_borrowing()` returned the
+   correct delta; `reclassify_borrowing()` applied it correctly. Deleted
+   the test user and all its data afterward via
+   `delete_user_and_all_data()` - confirmed 0 rows remain for that email.
+
+**Outstanding owner approvals (not applied - code/capability only):**
+- Reclassifying the real Tasha Cargo (446,000, account 6) borrowing from
+  Cash Loan to Goods on Credit. The capability exists
+  (`/debts/borrowings/2/reclassify/`, preview-then-confirm) but was not
+  used on this real record. Doing so will reduce that account's balance
+  by 446,000.00 (removing the cash-receive posting it never should have
+  had) - confirm this is wanted before applying it.
+- Setting/correcting the real WALLET account's `opening_balance_date` -
+  not touched this phase.
+
+**Known limitations:** none newly introduced. See `PROJECT_STATUS.md`
+for the overall list.
+
+**Next steps:** get the two approvals above, apply them via the
+existing reclassify UI / a direct, reviewed opening-balance-date edit
+(never automatically), then re-verify balances before/after exactly as
+this phase did.
