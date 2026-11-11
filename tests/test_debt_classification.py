@@ -236,7 +236,7 @@ class ReclassifyViewTests(TestCase):
         self.assertEqual(account_balance(self.wallet), Decimal("0.00"))
 
     def test_cannot_reclassify_another_users_borrowing(self):
-        other = User.objects.create_user(email="otherreclass@example.com", password="StrongPass123!")
+        User.objects.create_user(email="otherreclass@example.com", password="StrongPass123!")
         self.client.logout()
         self.client.login(email="otherreclass@example.com", password="StrongPass123!")
         response = self.client.post(
@@ -285,7 +285,7 @@ class OpeningBalanceCutoffHistoricalTests(TestCase):
         self.user = User.objects.create_user(email="cutoff@example.com", password="StrongPass123!")
 
     def test_balance_as_of_before_cutoff_is_none(self):
-        account = FinancialAccount.objects.create(
+        FinancialAccount.objects.create(
             user=self.user, name="Wallet", account_type="cash",
             opening_balance=Decimal("631200.00"), opening_balance_date=datetime.date(2026, 11, 9),
         )
@@ -293,7 +293,7 @@ class OpeningBalanceCutoffHistoricalTests(TestCase):
         self.assertIsNone(balance_as_of(self.user, datetime.date(2026, 11, 8)))
 
     def test_balance_as_of_on_and_after_cutoff_is_correct(self):
-        account = FinancialAccount.objects.create(
+        FinancialAccount.objects.create(
             user=self.user, name="Wallet", account_type="cash",
             opening_balance=Decimal("631200.00"), opening_balance_date=datetime.date(2026, 11, 9),
         )
@@ -331,7 +331,7 @@ class OpeningBalanceCutoffHistoricalTests(TestCase):
         self.assertEqual(balance_as_of(self.user, datetime.date(2026, 11, 10)), Decimal("611200.00"))
 
     def test_no_cutoff_account_behaves_as_before(self):
-        account = FinancialAccount.objects.create(
+        FinancialAccount.objects.create(
             user=self.user, name="Bank", account_type="bank", opening_balance=Decimal("100000.00")
         )
         self.assertEqual(balance_as_of(self.user, datetime.date.today()), Decimal("100000.00"))
