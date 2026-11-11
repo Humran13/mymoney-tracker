@@ -47,6 +47,17 @@ def test_dashboard_has_no_overflow_and_mobile_nav_works(signed_in_page, live_ser
 
 
 @pytest.mark.parametrize("width", MOBILE_WIDTHS)
+def test_spending_trend_custom_range_has_no_overflow_on_mobile(signed_in_page, live_server, width):
+    page, user, account = signed_in_page
+    page.set_viewport_size({"width": width, "height": 800})
+    page.goto(live_server.url + "/")
+    page.wait_for_load_state("networkidle")
+    page.select_option("#trendPeriod", "custom")
+    page.wait_for_selector("#trendCustomRange:not(.hidden)")
+    _assert_no_horizontal_overflow(page, width)
+
+
+@pytest.mark.parametrize("width", MOBILE_WIDTHS)
 def test_quick_add_expense_from_mobile_bar(signed_in_page, live_server, width):
     page, user, account = signed_in_page
     page.set_viewport_size({"width": width, "height": 800})

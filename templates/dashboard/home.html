@@ -43,7 +43,20 @@
 
 <div class="grid lg:grid-cols-3 gap-6">
   <div class="lg:col-span-2 min-w-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
-    <h2 class="font-semibold mb-3">Spending trend (last 6 months)</h2>
+    <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
+      <h2 class="font-semibold" id="trendTitle">{{ trend_title }}</h2>
+      <select id="trendPeriod" class="!w-auto text-sm py-1">
+        {% for value, label in trend_period_choices %}
+        <option value="{{ value }}" {% if value == trend_period %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div id="trendCustomRange" class="flex flex-wrap items-center gap-2 mb-3 {% if trend_period != 'custom' %}hidden{% endif %}">
+      <input type="date" id="trendStart" value="{{ trend_start|date:'Y-m-d' }}" class="!w-auto text-sm py-1">
+      <span class="text-sm text-slate-500">to</span>
+      <input type="date" id="trendEnd" value="{{ trend_end|date:'Y-m-d' }}" class="!w-auto text-sm py-1">
+      <button type="button" id="trendCustomApply" class="px-3 py-1 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Apply</button>
+    </div>
     <div class="relative w-full min-w-0 overflow-hidden" style="height: 110px;">
       <canvas id="trendChart" class="!max-w-full"></canvas>
     </div>
@@ -85,7 +98,11 @@
 </div>
 
 <script>
-  new Chart(document.getElementById('trendChart'), {
+  function formatUGX(value) {
+    return 'UGX ' + Math.round(value).toLocaleString('en-US');
+  }
+
+  const trendChart = new Chart(document.getElementById('trendChart'), {
     type: 'line',
     data: {
       labels: {{ trend_labels|safe }},
@@ -101,8 +118,48 @@
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => formatUGX(ctx.parsed.y) } },
+      },
+      scales: { y: { beginAtZero: true, ticks: { callback: formatUGX } } },
+    }
+  });
+
+  const trendPeriodSelect = document.getElementById('trendPeriod');
+  const trendCustomRange = document.getElementById('trendCustomRange');
+  const trendStartInput = document.getElementById('trendStart');
+  const trendEndInput = document.getElementById('trendEnd');
+  const trendCustomApply = document.getElementById('trendCustomApply');
+  const trendTitleEl = document.getElementById('trendTitle');
+
+  function loadTrend(period, start, end) {
+    const params = new URLSearchParams({ period });
+    if (period === 'custom' && start && end) {
+      params.set('start', start);
+      params.set('end', end);
+    }
+    fetch(`{% url 'dashboard:trend_data' %}?${params.toString()}`)
+      .then((r) => r.json())
+      .then((data) => {
+        trendChart.data.labels = data.labels;
+        trendChart.data.datasets[0].data = data.totals;
+        trendChart.update();
+        trendTitleEl.textContent = data.title;
+      });
+  }
+
+  trendPeriodSelect.addEventListener('change', () => {
+    const period = trendPeriodSelect.value;
+    trendCustomRange.classList.toggle('hidden', period !== 'custom');
+    if (period !== 'custom') {
+      loadTrend(period);
+    }
+  });
+
+  trendCustomApply.addEventListener('click', () => {
+    if (trendStartInput.value && trendEndInput.value) {
+      loadTrend('custom', trendStartInput.value, trendEndInput.value);
     }
   });
 </script>

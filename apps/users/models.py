@@ -79,6 +79,9 @@ class UserProfile(TimeStampedModel):
     timezone = models.CharField(max_length=64, default="Africa/Kampala")
     theme = models.CharField(max_length=10, choices=THEME_CHOICES, default="system")
     first_time_setup_complete = models.BooleanField(default=False)
+    dashboard_trend_period = models.CharField(max_length=20, default="6m")
+    dashboard_trend_start = models.DateField(null=True, blank=True)
+    dashboard_trend_end = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return f"Profile<{self.user.email}>"

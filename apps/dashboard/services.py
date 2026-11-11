@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
@@ -41,24 +42,113 @@ def health_warnings(user, report, goals):
     return warnings
 
 
-def spending_trend(user, months=6):
-    from apps.transactions.models import Transaction
+TREND_PERIOD_CHOICES = [
+    ("7d", "Last 7 Days"),
+    ("30d", "Last 30 Days"),
+    ("3m", "Last 3 Months"),
+    ("6m", "Last 6 Months"),
+    ("12m", "Last 12 Months"),
+    ("this_year", "This Year"),
+    ("last_year", "Last Year"),
+    ("all_time", "All Time"),
+    ("custom", "Custom Date Range"),
+]
+TREND_PERIOD_LABELS = dict(TREND_PERIOD_CHOICES)
+TREND_DEFAULT_PERIOD = "6m"
+
+
+def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
+    """Expense totals for the selected period, bucketed by day/month/year
+    depending on the span. Buckets with no expenses are included (as 0),
+    never skipped — the trend line must show a full, continuous period."""
     from django.db.models import Sum
 
+    from apps.transactions.models import Transaction
+
     today = timezone.localdate()
+
+    if period == "custom" and start and end and start <= end:
+        start_date, end_date = start, end
+    else:
+        period = period if period in TREND_PERIOD_LABELS and period != "custom" else TREND_DEFAULT_PERIOD
+        start_date = end_date = None
+
+    if period == "7d":
+        end_date, start_date = today, today - timedelta(days=6)
+    elif period == "30d":
+        end_date, start_date = today, today - timedelta(days=29)
+    elif period == "3m":
+        end_date = today
+        start_date = today.replace(day=1) - relativedelta(months=2)
+    elif period == "6m":
+        end_date = today
+        start_date = today.replace(day=1) - relativedelta(months=5)
+    elif period == "12m":
+        end_date = today
+        start_date = today.replace(day=1) - relativedelta(months=11)
+    elif period == "this_year":
+        end_date = today
+        start_date = today.replace(month=1, day=1)
+    elif period == "last_year":
+        start_date = today.replace(year=today.year - 1, month=1, day=1)
+        end_date = today.replace(year=today.year - 1, month=12, day=31)
+    elif period == "all_time":
+        first_tx = Transaction.objects.filter(user=user).order_by("date").first()
+        start_date = first_tx.date if first_tx else today
+        end_date = today
+    # else: period == "custom" — start_date/end_date already set above
+
+    span_days = (end_date - start_date).days
+
+    if period in ("7d", "30d"):
+        granularity = "day"
+    elif period == "custom":
+        granularity = "day" if span_days <= 62 else "month" if span_days <= 730 else "year"
+    elif period == "all_time":
+        granularity = "year" if span_days > 730 else "month"
+    else:
+        granularity = "month"
+
     labels, totals = [], []
-    for i in range(months - 1, -1, -1):
-        month_start = (today.replace(day=1)) - relativedelta(months=i)
-        month_end = month_start + relativedelta(months=1, days=-1)
-        total = (
-            Transaction.objects.filter(user=user, kind="expense", date__gte=month_start, date__lte=month_end).aggregate(
-                t=Sum("amount")
-            )["t"]
-            or Decimal("0.00")
-        )
-        labels.append(month_start.strftime("%b %Y"))
-        totals.append(float(total))
-    return labels, totals
+    base_qs = Transaction.objects.filter(user=user, kind="expense")
+
+    if granularity == "day":
+        d = start_date
+        while d <= end_date:
+            total = base_qs.filter(date=d).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            labels.append(d.strftime("%d %b"))
+            totals.append(float(total))
+            d += timedelta(days=1)
+    elif granularity == "month":
+        cur = start_date.replace(day=1)
+        end_month = end_date.replace(day=1)
+        while cur <= end_month:
+            bucket_end = min(cur + relativedelta(months=1, days=-1), end_date)
+            total = base_qs.filter(date__gte=cur, date__lte=bucket_end).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            labels.append(cur.strftime("%b %Y"))
+            totals.append(float(total))
+            cur += relativedelta(months=1)
+    else:  # year
+        for year in range(start_date.year, end_date.year + 1):
+            bucket_start = max(date(year, 1, 1), start_date)
+            bucket_end = min(date(year, 12, 31), end_date)
+            total = base_qs.filter(date__gte=bucket_start, date__lte=bucket_end).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            labels.append(str(year))
+            totals.append(float(total))
+
+    if period == "custom":
+        title = f"Spending trend ({start_date.strftime('%d %b %Y')} – {end_date.strftime('%d %b %Y')})"
+    else:
+        title = f"Spending trend ({TREND_PERIOD_LABELS[period]})"
+
+    return {
+        "labels": labels,
+        "totals": totals,
+        "title": title,
+        "period": period,
+        "start": start_date.isoformat(),
+        "end": end_date.isoformat(),
+    }
 
 
 def compute_dashboard(user):
@@ -75,7 +165,13 @@ def compute_dashboard(user):
     overdue_bills = [b for b in upcoming_bills if b.is_overdue()]
 
     warnings = health_warnings(user, report, goals)
-    labels, trend_totals = spending_trend(user)
+    profile = user.profile
+    trend = spending_trend(
+        user,
+        profile.dashboard_trend_period or TREND_DEFAULT_PERIOD,
+        profile.dashboard_trend_start,
+        profile.dashboard_trend_end,
+    )
 
     return {
         "today": today,
@@ -93,6 +189,11 @@ def compute_dashboard(user):
         "overdue_bills_count": len(overdue_bills),
         "goals": goals,
         "warnings": warnings,
-        "trend_labels": labels,
-        "trend_totals": trend_totals,
+        "trend_labels": trend["labels"],
+        "trend_totals": trend["totals"],
+        "trend_title": trend["title"],
+        "trend_period": trend["period"],
+        "trend_start": profile.dashboard_trend_start,
+        "trend_end": profile.dashboard_trend_end,
+        "trend_period_choices": TREND_PERIOD_CHOICES,
     }
