@@ -33,7 +33,9 @@ See `PHASE13_HANDOFF.md` for the full record.
   "received" and "spent" figures (only the transfer fee counts).
 - **Tests:** 243 unit/integration (was 136) and 318 across the whole tree in CI
   order (Chromium); the new Phase 13 E2E suite also passes on Firefox and WebKit.
-  `ruff` clean, `manage.py check` clean.
+- `ruff` clean, `manage.py check` clean.
+- **GitHub:** pushed to `origin/master` (head `4bbeb41`); CI run `43233071723`
+  green on all 5 jobs, with 318 tests passing against real PostgreSQL.
 - **Deployment: pending.** See `PHASE13_HANDOFF.md` §8 for the exact, previously
   used backup → migrate → verify sequence.
 

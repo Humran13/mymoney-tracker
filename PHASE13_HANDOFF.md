@@ -332,6 +332,26 @@ assume a data migration's rows are present.**
 
 ---
 
+## 6a. GitHub commits and CI verification
+
+| Commit | Contents |
+|---|---|
+| `54a02c9` | Phase 13 feature + tests + migrations |
+| `755ecd4` | `PHASE13_HANDOFF.md` + `PROJECT_STATUS.md` |
+| `4bbeb41` | CI-only test-isolation fix + updated test counts |
+
+Pushed normally to `origin/master` (no force-push). `git rev-parse HEAD` and
+`origin/master` both resolved to `4bbeb41b1c7946c11f195241a13cf3c06a9be2aa`
+after the final push.
+
+**CI (run `43233071723`, GitHub's own infrastructure): all 5 jobs passed** —
+`lint`, `test`, `docker-build`, `frontend-build`, `dependency-audit`. The
+`test` job ran the whole suite **against a real PostgreSQL service container**:
+`318 passed in 237.61s`. (An earlier run, `43231258348`, failed 7 tests and is
+what led to the isolation fix above — it is not a passing run.)
+
+---
+
 ## 7. What still needs the owner's explicit approval (real data)
 
 Nothing below was applied. The app *can* do each one; only the owner can decide.
