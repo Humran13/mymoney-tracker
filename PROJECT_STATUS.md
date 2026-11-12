@@ -1,13 +1,41 @@
 # Project Status
 
-**Last updated:** 2026-11-10
-**Current phase:** Phase 10 (live CloudPanel VPS deployment) — complete.
-MyMoney Tracker is deployed and live at https://money.therealworldboosts.com.
-See the Phase 10 section below for deployment details. Phase 9 (final
-hardening, mobile optimization, testing, GitHub publication, CloudPanel
-deployment prep) — complete except for the
-items under "External blockers" below, which require live VPS/CloudPanel
-access this environment doesn't have.
+**Last updated:** 2026-11-12
+**Current phase:** Phase 13 (financial accuracy &amp; dashboard improvements) —
+code complete and tested; **not yet deployed** (this session had no VPS access).
+See `PHASE13_HANDOFF.md` for the full record.
+
+## Phase 13 — financial accuracy (2026-11-12)
+
+- New **Income vs Expenses Analysis** page (`/reports/income-vs-expenses/`):
+  defaults to today, 7/30/60-day and custom ranges, per-day breakdown, weekly
+  comparison, per-day drill-down. Cash movement and accrual income/expenses are
+  shown as two clearly separated statements.
+- Dashboard now shows a **monthly Income | Expenses | Difference** card with a
+  month picker, and the "expenses exceed income" warning is clickable, names the
+  shortfall amount and links to the analysis page.
+- **Charity** and **Shipping Fees** expense categories added (idempotent data
+  migration; global, so every existing user gets them with no per-user rewrite).
+- **Optional transaction fee on debt repayments** (`BorrowingRepayment.fee_amount`,
+  default 0): reduces the paying account and counts once as an expense, never
+  reduces the debt principal. Repayments can now also be edited and deleted.
+- **"Last 24 Hours"** added to the spending-trend selector. Honest limitation:
+  transactions store a date, not a timestamp, so this is today's calendar-day
+  total, labelled as such in the UI.
+- **Historical-debt double-counting**: the real cause was that every
+  pre-existing account has `opening_balance_date = NULL`, so the Phase 11 cutoff
+  never applied — plus onboarding never defaulted the date. New accounts now
+  default it; existing accounts are surfaced on a new read-only
+  **`/accounts/reconciliation/`** screen. **No real balance was changed**:
+  applying a snapshot date is a two-step, audited, reversible action the owner
+  must take explicitly.
+- Internal transfers no longer inflate the dashboard's / Daily Closing's
+  "received" and "spent" figures (only the transfer fee counts).
+- **Tests:** 242 unit/integration (was 136) and 75 browser tests on Chromium
+  (plus the new Phase 13 E2E suite on Firefox and WebKit) — all passing.
+  `ruff` clean, `manage.py check` clean.
+- **Deployment: pending.** See `PHASE13_HANDOFF.md` §8 for the exact, previously
+  used backup → migrate → verify sequence.
 
 ## Phase 10 — live deployment (2026-11-10)
 
