@@ -6,8 +6,8 @@ from django.utils import timezone
 
 from apps.core.audit import log_audit_event
 
-from . import services
-from .forms import FinancialAccountForm, TransferForm
+from . import reconciliation, services
+from .forms import FinancialAccountForm, OpeningSnapshotForm, TransferForm
 from .models import FinancialAccount, Transfer
 
 AccountFormSet = modelformset_factory(FinancialAccount, form=FinancialAccountForm, extra=1, can_delete=False)
@@ -102,6 +102,67 @@ def account_reactivate(request, pk):
         account.save(update_fields=["status"])
         messages.success(request, f"Account '{account.name}' reactivated.")
     return redirect("accounts:list")
+
+
+@login_required
+def reconciliation_review(request):
+    """Read-only preview of every account's opening-balance position.
+
+    No money is changed here, ever — the page only shows what is recorded and
+    what a chosen snapshot date would do. Applying one is a separate,
+    explicitly confirmed POST (`accounts:opening_snapshot`).
+    """
+    preview = reconciliation.reconciliation_preview(request.user)
+    return render(
+        request,
+        "accounts/reconciliation.html",
+        {
+            **preview,
+            "snapshot_form": OpeningSnapshotForm(),
+            "pending": None,
+        },
+    )
+
+
+@login_required
+def opening_snapshot(request, pk):
+    account = get_object_or_404(FinancialAccount, pk=pk, user=request.user)
+    if request.method != "POST":
+        return redirect("accounts:reconciliation")
+
+    form = OpeningSnapshotForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "That date could not be read, so nothing was changed.")
+        return redirect("accounts:reconciliation")
+
+    new_date = form.cleaned_data["opening_balance_date"]
+    if request.POST.get("confirm") != "1":
+        row = reconciliation.account_reconciliation(account)
+        projected = reconciliation.snapshot_balance(account, new_date)
+        preview = reconciliation.reconciliation_preview(request.user)
+        return render(
+            request,
+            "accounts/reconciliation.html",
+            {
+                **preview,
+                "snapshot_form": form,
+                "pending": {
+                    "account": account,
+                    "new_date": new_date,
+                    "current_balance": row["current_balance"],
+                    "projected_balance": projected,
+                    "difference": projected - row["current_balance"],
+                },
+            },
+        )
+
+    result = reconciliation.apply_opening_snapshot_date(account=account, new_date=new_date, actor=request.user)
+    messages.success(
+        request,
+        f"Snapshot date for {account.name} set to {new_date or 'none'}. "
+        f"Balance {result['balance_before']:,.2f} → {result['balance_after']:,.2f}.",
+    )
+    return redirect("accounts:reconciliation")
 
 
 @login_required

@@ -1,0 +1,19 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Delete repayment · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="debts:borrowing_detail" back_url_arg=borrowing.pk %}
+<h1 class="text-xl font-semibold mb-4">Delete this repayment?</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-red-200 p-6 max-w-lg">
+  <p class="text-sm mb-4">
+    Deleting the {{ repayment.amount|money }} repayment to {{ borrowing.lender_name }} on {{ repayment.date }}
+    {% if repayment.fee_amount %}and its {{ repayment.fee_amount|money }} transaction fee {% endif %}
+    restores your account balance and increases the outstanding debt again.
+  </p>
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg px-5 py-2.5">Delete</button>
+    <a href="{% url 'debts:borrowing_detail' borrowing.pk %}" class="ml-3 text-sm text-slate-500">Cancel</a>
+  </form>
+</div>
+{% endblock %}

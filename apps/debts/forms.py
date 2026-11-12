@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 
 from apps.accounts.models import FinancialAccount
@@ -58,7 +60,7 @@ class BorrowingReclassifyForm(forms.Form):
 class BorrowingRepaymentForm(forms.ModelForm):
     class Meta:
         model = BorrowingRepayment
-        fields = ["amount", "date", "paying_account", "notes"]
+        fields = ["amount", "fee_amount", "date", "paying_account", "notes"]
         widgets = {"date": forms.DateInput(attrs={"type": "date"})}
 
     def __init__(self, *args, user=None, borrowing=None, **kwargs):
@@ -67,15 +69,35 @@ class BorrowingRepaymentForm(forms.ModelForm):
         self.fields["paying_account"].queryset = FinancialAccount.objects.filter(
             user=user, status=FinancialAccount.Status.ACTIVE
         )
+        # Zero unless the payment channel actually charged something — a fee
+        # must never be required, and must never be silently invented.
+        self.fields["fee_amount"].required = False
+        self.fields["fee_amount"].initial = self.instance.fee_amount if self.instance.pk else 0
+        self.fields["fee_amount"].widget = forms.NumberInput(attrs={"step": "0.01", "min": "0"})
+
+    def _available_principal(self):
+        """Principal still repayable, adding back this form's own repayment
+        when editing so a legitimate increase isn't rejected as overpayment."""
+        if self.borrowing is None:
+            return None
+        available = self.borrowing.outstanding()
+        if self.instance.pk:
+            available += self.instance.amount
+        return available
 
     def clean_amount(self):
         value = self.cleaned_data["amount"]
         if value <= 0:
             raise forms.ValidationError("Repayment amount must be greater than zero.")
-        if self.borrowing is not None and value > self.borrowing.outstanding():
-            raise forms.ValidationError(
-                f"That's more than the {self.borrowing.outstanding()} still outstanding on this borrowing."
-            )
+        available = self._available_principal()
+        if available is not None and value > available:
+            raise forms.ValidationError(f"That's more than the {available} still outstanding on this borrowing.")
+        return value
+
+    def clean_fee_amount(self):
+        value = self.cleaned_data.get("fee_amount") or Decimal("0.00")
+        if value < 0:
+            raise forms.ValidationError("Transaction fee cannot be negative.")
         return value
 
 

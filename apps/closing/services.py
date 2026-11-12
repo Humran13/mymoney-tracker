@@ -32,14 +32,23 @@ def balance_as_of(user, date):
 
 
 def day_breakdown(user, date):
+    """Cash in / cash out for one day.
+
+    Internal transfers are deliberately excluded from `received`/`spent`:
+    moving money between the user's own accounts doesn't make them any richer
+    or poorer, and counting both legs would inflate both sides of the same
+    figure (Phase 13, accounting rule 7). They remain in `by_type` and in the
+    two explicit `transfers_*` keys so the closing page can still show them,
+    and a transfer *fee* — which is a genuine cost — stays in `spent`.
+    """
     postings = AccountPosting.objects.filter(user=user, occurred_on=date)
     totals = dict(postings.values_list("source_type").annotate(total=Sum("amount")))
     received = sum(
-        (v for k, v in totals.items() if k in (AccountPosting.SourceType.INCOME, AccountPosting.SourceType.BORROW_RECEIVE, AccountPosting.SourceType.TRANSFER_IN, AccountPosting.SourceType.LEND_REPAY)),
+        (v for k, v in totals.items() if k in (AccountPosting.SourceType.INCOME, AccountPosting.SourceType.BORROW_RECEIVE, AccountPosting.SourceType.LEND_REPAY)),
         Decimal("0.00"),
     )
     spent = sum(
-        (-v for k, v in totals.items() if k in (AccountPosting.SourceType.EXPENSE, AccountPosting.SourceType.FEE, AccountPosting.SourceType.LEND_SEND, AccountPosting.SourceType.BORROW_REPAY, AccountPosting.SourceType.TRANSFER_OUT, AccountPosting.SourceType.BILL_PAYMENT)),
+        (-v for k, v in totals.items() if k in (AccountPosting.SourceType.EXPENSE, AccountPosting.SourceType.FEE, AccountPosting.SourceType.LEND_SEND, AccountPosting.SourceType.BORROW_REPAY, AccountPosting.SourceType.BILL_PAYMENT)),
         Decimal("0.00"),
     )
     opening_balance = balance_as_of(user, date - timedelta(days=1))
@@ -52,4 +61,6 @@ def day_breakdown(user, date):
         "spent": spent,
         "net": received - spent,
         "by_type": totals,
+        "transfers_in": totals.get(AccountPosting.SourceType.TRANSFER_IN, Decimal("0.00")),
+        "transfers_out": -totals.get(AccountPosting.SourceType.TRANSFER_OUT, Decimal("0.00")),
     }

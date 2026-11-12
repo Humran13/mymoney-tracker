@@ -46,7 +46,6 @@ def compute_monthly_report(user, year, month):
     income_total = txns.filter(kind="income").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
     expense_principal = txns.filter(kind="expense").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
     fee_total = txns.aggregate(t=Sum("fee_amount"))["t"] or Decimal("0.00")
-    expense_total = expense_principal + fee_total
 
     by_category = (
         txns.filter(kind="expense")
@@ -63,14 +62,29 @@ def compute_monthly_report(user, year, month):
         Lending.objects.filter(user=user, date_lent__gte=start, date_lent__lte=end).aggregate(t=Sum("amount"))["t"]
         or Decimal("0.00")
     )
-    borrowing_repayments = (
+    borrowing_repayments_total = (
         BorrowingRepayment.objects.filter(user=user, date__gte=start, date__lte=end).aggregate(t=Sum("amount"))["t"]
+        or Decimal("0.00")
+    )
+    # Transaction fee charged by the paying channel on a debt repayment:
+    # real cash out and a real expense, but never part of the debt principal.
+    # Counted exactly once here (it lives only on the repayment row, and
+    # produces exactly one FEE posting); no existing repayment has one, so
+    # this leaves every pre-Phase-13 total arithmetically identical.
+    borrowing_repayment_fees = (
+        BorrowingRepayment.objects.filter(user=user, date__gte=start, date__lte=end).aggregate(t=Sum("fee_amount"))["t"]
         or Decimal("0.00")
     )
     lending_repayments = (
         LendingRepayment.objects.filter(user=user, date__gte=start, date__lte=end).aggregate(t=Sum("principal_amount"))["t"]
         or Decimal("0.00")
     )
+    # Expenses *incurred* in the month: purchase/service amounts plus every
+    # fee paid to move or repay money. Loan principal repaid is deliberately
+    # NOT in here — it settles a liability created earlier (or financed a
+    # purchase already counted), so counting it as an expense too would
+    # double-count the same money (accounting rule 10).
+    expense_total = expense_principal + fee_total + borrowing_repayment_fees
 
     opening_outstanding_debts = sum(
         (outstanding_borrowing_as_of(b, prev_month_end) for b in Borrowing.objects.filter(user=user, date_borrowed__lte=prev_month_end)),
@@ -104,6 +118,9 @@ def compute_monthly_report(user, year, month):
         "total_expenses": expense_total,
         "net": income_total - expense_total,
         "mobile_money_fees": fee_total,
+        "transaction_fees": fee_total,
+        "repayment_fees": borrowing_repayment_fees,
+        "total_fees": fee_total + borrowing_repayment_fees,
         "spending_by_category": list(by_category),
         "largest_categories": list(by_category[:5]),
         "opening_balance": balance_as_of(user, prev_month_end),
@@ -111,7 +128,7 @@ def compute_monthly_report(user, year, month):
         "balance_unavailable": balance_as_of(user, prev_month_end) is None or balance_as_of(user, end) is None,
         "money_borrowed": borrowed_this_month,
         "money_lent": lent_this_month,
-        "loan_repayments_paid": borrowing_repayments,
+        "loan_repayments_paid": borrowing_repayments_total,
         "loan_repayments_received": lending_repayments,
         "opening_outstanding_debts": opening_outstanding_debts,
         "closing_outstanding_debts": closing_outstanding_debts,

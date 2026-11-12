@@ -10,10 +10,51 @@
 {% if warnings %}
 <div class="space-y-2 mb-4">
   {% for w in warnings %}
-  <div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-2 text-sm">⚠️ {{ w }}</div>
+  <div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-2 text-sm flex flex-wrap items-center gap-x-2">
+    <span>⚠️ {{ w.text }}</span>
+    {% if w.url %}<a href="{{ w.url }}" class="font-medium underline whitespace-nowrap">{{ w.link_text }} &rarr;</a>{% endif %}
+  </div>
   {% endfor %}
 </div>
 {% endif %}
+
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 mb-6">
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <h2 class="font-semibold capitalize">{{ month_label }}: income vs expenses</h2>
+    <div class="flex items-center gap-2">
+      <a href="?month={{ month_links.previous }}" class="px-2 py-1 text-sm rounded-lg border border-slate-300 dark:border-slate-600" aria-label="Previous month">&larr;</a>
+      <form method="get" class="flex items-center gap-2">
+        <input type="month" name="month" value="{{ month_value }}" max="{{ today|date:'Y-m' }}" class="!w-auto text-sm py-1">
+        <button type="submit" class="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700">Go</button>
+      </form>
+      {% if month_links.next_disabled %}
+      <span class="px-2 py-1 text-sm rounded-lg border border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600">&rarr;</span>
+      {% else %}
+      <a href="?month={{ month_links.next }}" class="px-2 py-1 text-sm rounded-lg border border-slate-300 dark:border-slate-600" aria-label="Next month">&rarr;</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="grid grid-cols-2 gap-3">
+    <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+      <p class="text-xs text-green-700">Income</p>
+      <p class="text-lg font-bold text-green-700 break-words">{{ monthly_income|money }}</p>
+    </div>
+    <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+      <p class="text-xs text-red-700">Expenses</p>
+      <p class="text-lg font-bold text-red-700 break-words">{{ monthly_expenses|money }}</p>
+    </div>
+  </div>
+  <div class="mt-3 rounded-lg p-3 border {% if monthly_difference < 0 %}bg-red-50 border-red-200{% elif monthly_difference > 0 %}bg-green-50 border-green-200{% else %}bg-slate-50 dark:bg-slate-700/40 border-slate-200 dark:border-slate-700{% endif %}">
+    <p class="text-xs text-slate-500">Difference</p>
+    <p class="text-lg font-bold break-words {% if monthly_difference < 0 %}text-red-700{% elif monthly_difference > 0 %}text-green-700{% endif %}">{% if monthly_difference > 0 %}+{% endif %}{{ monthly_difference|money }}</p>
+    <p class="text-xs mt-1 {% if monthly_difference < 0 %}text-red-700{% elif monthly_difference > 0 %}text-green-700{% else %}text-slate-500{% endif %}">
+      {% if monthly_difference < 0 %}Your expenses exceed your income {% if month_is_current %}this month{% else %}this month{% endif %} by {{ monthly_difference|money }}.
+      {% elif monthly_difference > 0 %}You kept {{ monthly_difference|money }} of what you earned.
+      {% else %}Income and expenses are exactly equal.{% endif %}
+    </p>
+  </div>
+  <a href="{% url 'reports:income_vs_expenses' %}" class="inline-block mt-3 text-sm font-medium text-brand-700 dark:text-brand-400">See the daily income vs expenses analysis &rarr;</a>
+</div>
 
 <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
@@ -60,13 +101,9 @@
     <div class="relative w-full min-w-0 overflow-hidden" style="height: 110px;">
       <canvas id="trendChart" class="!max-w-full"></canvas>
     </div>
+    <p id="trendNote" class="mt-2 text-xs text-slate-500 {% if not trend_note %}hidden{% endif %}">{{ trend_note|default:"" }}</p>
   </div>
   <div class="space-y-4">
-    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-      <p class="text-xs text-slate-500">This month: income vs expenses</p>
-      <p class="text-sm mt-1">Income: <span class="font-medium text-green-600">{{ monthly_income|money }}</span></p>
-      <p class="text-sm">Expenses: <span class="font-medium text-red-600">{{ monthly_expenses|money }}</span></p>
-    </div>
     <div class="bg-red-50 border border-red-200 rounded-xl p-4">
       <p class="text-xs text-red-700">Money I owe</p><p class="text-lg font-bold text-red-700">{{ money_owed_by_me|money }}</p>
     </div>
@@ -132,6 +169,7 @@
   const trendEndInput = document.getElementById('trendEnd');
   const trendCustomApply = document.getElementById('trendCustomApply');
   const trendTitleEl = document.getElementById('trendTitle');
+  const trendNoteEl = document.getElementById('trendNote');
 
   function loadTrend(period, start, end) {
     const params = new URLSearchParams({ period });
@@ -146,6 +184,15 @@
         trendChart.data.datasets[0].data = data.totals;
         trendChart.update();
         trendTitleEl.textContent = data.title;
+        // "Last 24 Hours" is a calendar-day total (no time-of-day is stored);
+        // say so next to the chart rather than implying an hourly window.
+        if (data.note) {
+          trendNoteEl.textContent = data.note;
+          trendNoteEl.classList.remove('hidden');
+        } else {
+          trendNoteEl.textContent = '';
+          trendNoteEl.classList.add('hidden');
+        }
       });
   }
 

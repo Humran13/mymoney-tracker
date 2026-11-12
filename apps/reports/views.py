@@ -4,8 +4,9 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 
-from . import services
+from . import cash_flow, services
 
 
 def _resolve_year_month(request):
@@ -13,6 +14,41 @@ def _resolve_year_month(request):
     year = int(request.GET.get("year", today.year))
     month = int(request.GET.get("month", today.month))
     return year, month
+
+
+def _analysis_period(request):
+    start = parse_date(request.GET.get("start") or "")
+    end = parse_date(request.GET.get("end") or "")
+    on = parse_date(request.GET.get("date") or "")
+    return cash_flow.resolve_period(
+        request.GET.get("preset", cash_flow.DEFAULT_PRESET), on=on, start=start, end=end
+    )
+
+
+@login_required
+def income_vs_expenses(request):
+    """Dedicated "Income vs Expenses Analysis" page (Phase 13, improvement 1).
+
+    Defaults to today; every figure comes from the same ledger the dashboard
+    balance is built from, so the two can never disagree.
+    """
+    period = _analysis_period(request)
+    context = cash_flow.analysis(request.user, period)
+    return render(request, "reports/income_vs_expenses.html", context)
+
+
+@login_required
+def income_vs_expenses_day(request, date):
+    """Drill-down for a single day: every source object once, grouped by
+    category, account, merchant/description and fees."""
+    the_date = parse_date(date)
+    if the_date is None:
+        return render(request, "reports/income_vs_expenses_day.html", {"detail": None, "date": date}, status=404)
+    return render(
+        request,
+        "reports/income_vs_expenses_day.html",
+        {"detail": cash_flow.day_detail(request.user, the_date), "date": the_date},
+    )
 
 
 @login_required

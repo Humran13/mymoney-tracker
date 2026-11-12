@@ -1,0 +1,144 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Balance reconciliation · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="accounts:list" %}
+<h1 class="text-xl font-semibold mb-1">Opening balance reconciliation</h1>
+<p class="text-sm text-slate-500 mb-4">
+  A read-only review. Nothing here changes your money — the only action available is setting an account's
+  opening-balance <span class="font-medium">date</span>, and only after you confirm it.
+</p>
+
+<div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-xs text-slate-600 dark:text-slate-300 mb-6">
+  <p class="font-medium mb-1">How an opening balance works here</p>
+  <p>Your opening balance is the money actually in the account at the <span class="font-medium">start</span> of the
+  snapshot date. Everything dated on or after that date is added on top; anything dated before it is kept as
+  historical record but does not change today's balance — it is already inside the opening balance.</p>
+</div>
+
+{% if pending %}
+<div class="bg-amber-50 border border-amber-300 rounded-xl p-4 mb-6">
+  <h2 class="font-semibold text-amber-900 mb-2">Preview — not applied yet</h2>
+  <p class="text-sm text-amber-900">Setting {{ pending.account.name }}'s opening-balance date to
+    <span class="font-medium">{{ pending.new_date|default:"none" }}</span> would change its balance:</p>
+  <div class="text-sm mt-2 space-y-1">
+    <div>Current balance: <span class="font-medium">{{ pending.current_balance|money }}</span></div>
+    <div>Balance after: <span class="font-medium">{{ pending.projected_balance|money }}</span></div>
+    <div>Difference: <span class="font-medium">{% if pending.difference > 0 %}+{% endif %}{{ pending.difference|money }}</span></div>
+  </div>
+  <form method="post" action="{% url 'accounts:opening_snapshot' pending.account.pk %}" class="mt-3 flex flex-wrap gap-3 items-end">
+    {% csrf_token %}
+    <input type="hidden" name="confirm" value="1">
+    <input type="hidden" name="opening_balance_date" value="{{ pending.new_date|date:'Y-m-d' }}">
+    <button type="submit" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">Yes, apply this date</button>
+    <a href="{% url 'accounts:reconciliation' %}" class="text-sm text-slate-500">Cancel</a>
+  </form>
+</div>
+{% endif %}
+
+<div class="grid sm:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Accounts needing review</p><p class="text-xl font-bold">{{ needs_review_count }}</p>
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Accounts with a snapshot date</p><p class="text-xl font-bold">{{ ok_count }}</p>
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <p class="text-xs text-slate-500">Historical cash loans still owed</p><p class="text-xl font-bold">{{ historical_cash_loan_total|money }}</p>
+  </div>
+</div>
+
+
+<div class="space-y-6">
+  {% for row in accounts %}
+  <div class="bg-white dark:bg-slate-800 border {% if row.needs_review %}border-amber-300{% else %}border-slate-200 dark:border-slate-700{% endif %} rounded-xl p-5">
+    <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
+      <div class="min-w-0">
+        <h2 class="font-semibold">{{ row.account.name }}</h2>
+        <p class="text-xs text-slate-500">{{ row.account.get_account_type_display }} · created {{ row.created_date }}</p>
+      </div>
+      {% if row.needs_review %}
+      <span class="text-xs bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">No snapshot date</span>
+      {% else %}
+      <span class="text-xs bg-green-100 text-green-800 rounded-full px-2 py-0.5">Snapshot {{ row.opening_balance_date }}</span>
+      {% endif %}
+    </div>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-3">
+      <div><p class="text-xs text-slate-500">Opening balance</p><p class="font-medium">{{ row.opening_balance|money }}</p></div>
+      <div><p class="text-xs text-slate-500">Opening date</p><p class="font-medium">{{ row.opening_balance_date|default:"—" }}</p></div>
+      <div><p class="text-xs text-slate-500">Current calculated balance</p><p class="font-medium">{{ row.current_balance|money }}</p></div>
+      <div><p class="text-xs text-slate-500">Proposed balance</p><p class="font-medium">{{ row.proposed_balance|money }}</p></div>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-3 text-sm mb-3">
+      <div class="bg-slate-50 dark:bg-slate-700/30 rounded-lg p-3">
+        <p class="text-xs text-slate-500 mb-1">Postings before the reference date</p>
+        <p>{{ row.before_cutoff_count }} posting(s), net {{ row.before_cutoff_sum|money }}</p>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-700/30 rounded-lg p-3">
+        <p class="text-xs text-slate-500 mb-1">Postings inside the tracked window</p>
+        <p>{{ row.after_cutoff_count }} posting(s), net {{ row.after_cutoff_sum|money }}</p>
+      </div>
+    </div>
+
+    {% if row.historical_cash_loans %}
+    <div class="mb-3">
+      <p class="text-xs text-slate-500 mb-1">Historical cash loans on this account</p>
+      {% for loan in row.historical_cash_loans %}
+      <div class="flex flex-wrap justify-between gap-2 text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+        <span class="min-w-0 break-words">{{ loan.lender_name }} · borrowed {{ loan.date_borrowed }}{% if loan.due_date %} · due {{ loan.due_date }}{% endif %}</span>
+        <span class="whitespace-nowrap">{{ loan.amount|money }} · {{ loan.outstanding|money }} outstanding</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if row.historical_repayments %}
+    <div class="mb-3">
+      <p class="text-xs text-slate-500 mb-1">Historical repayments from this account</p>
+      {% for repayment in row.historical_repayments %}
+      <div class="flex flex-wrap justify-between gap-2 text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+        <span class="min-w-0 break-words">{{ repayment.date }} · {{ repayment.borrowing.lender_name }}</span>
+        <span class="whitespace-nowrap">{{ repayment.amount|money }}{% if repayment.fee_amount %} (+{{ repayment.fee_amount|money }} fee){% endif %}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if row.candidates %}
+    <div class="mb-3">
+      <p class="text-xs text-slate-500 mb-1">If you set a snapshot date (for your review only)</p>
+      {% for candidate in row.candidates %}
+      <div class="flex flex-wrap justify-between gap-2 text-sm py-1">
+        <span>{{ candidate.date }}</span>
+        <span class="whitespace-nowrap">balance {{ candidate.balance|money }} ({% if candidate.difference > 0 %}+{% endif %}{{ candidate.difference|money }})</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% for note in row.ambiguity %}
+    <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">{{ note }}</p>
+    {% endfor %}
+    <p class="text-xs text-slate-500 mb-3">{{ row.explanation }}</p>
+
+    <details class="text-sm">
+      <summary class="cursor-pointer text-brand-700 dark:text-brand-400">Set or clear this account's snapshot date</summary>
+      <form method="post" action="{% url 'accounts:opening_snapshot' row.account.pk %}" class="mt-3 flex flex-wrap items-end gap-3">
+        {% csrf_token %}
+        <div>
+          <label for="snapshot-{{ row.account.pk }}" class="block text-xs text-slate-500 mb-1">Snapshot date</label>
+          <input type="date" name="opening_balance_date" id="snapshot-{{ row.account.pk }}"
+                 value="{{ row.opening_balance_date|date:'Y-m-d' }}" class="!w-auto text-sm py-1">
+        </div>
+        <button type="submit" class="px-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Preview change</button>
+      </form>
+      <p class="text-xs text-slate-500 mt-2">You will see the exact before/after balance and must confirm again before anything is saved.</p>
+    </details>
+  </div>
+  {% empty %}
+  <p class="text-sm text-slate-500">You have no accounts yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

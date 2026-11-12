@@ -10,7 +10,7 @@ from . import services
 def home(request):
     if not request.user.profile.first_time_setup_complete:
         return redirect("accounts:onboarding")
-    context = services.compute_dashboard(request.user)
+    context = services.compute_dashboard(request.user, request.GET.get("month"))
     return render(request, "dashboard/home.html", context)
 
 

@@ -8,7 +8,7 @@ EXPENSE_CATEGORIES = [
     "Breakfast", "Lunch", "Dinner", "Transport", "Fuel", "Rent", "Internet",
     "Mobile Data", "Airtime", "Electricity", "Water", "School Fees", "Shopping",
     "Medical Expenses", "Family Support", "Entertainment", "Mobile Money Fees",
-    "Other Expenses",
+    "Charity", "Shipping Fees", "Other Expenses",
 ]
 
 

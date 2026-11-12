@@ -1,8 +1,23 @@
 from decimal import Decimal
 
 from django import forms
+from django.utils import timezone
 
 from .models import FinancialAccount
+
+
+class OpeningSnapshotForm(forms.Form):
+    """Sets (or clears) an account's opening-balance snapshot date.
+
+    Date-only metadata: this form deliberately cannot change the opening
+    balance itself, so a reconciliation can never silently rewrite money.
+    """
+
+    opening_balance_date = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="The date your opening balance was actually true (start of that day). Leave blank to remove the cutoff.",
+    )
 
 
 class FinancialAccountForm(forms.ModelForm):
@@ -13,6 +28,15 @@ class FinancialAccountForm(forms.ModelForm):
             "opening_balance": forms.NumberInput(attrs={"step": "0.01", "min": "0"}),
             "opening_balance_date": forms.DateInput(attrs={"type": "date"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Default a *new* account's snapshot to today. Without this, onboarding
+        # silently created accounts with opening_balance_date=None — the exact
+        # condition that lets a backdated loan inflate the balance later. An
+        # existing account keeps whatever it has (including deliberately blank).
+        if not self.is_bound and not self.instance.pk and not self.initial.get("opening_balance_date"):
+            self.initial["opening_balance_date"] = timezone.localdate()
 
     def clean_opening_balance(self):
         value = self.cleaned_data["opening_balance"]

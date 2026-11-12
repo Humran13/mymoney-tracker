@@ -195,7 +195,7 @@ class BorrowingRepaymentSerializer(ScopedFieldsMixin, serializers.ModelSerialize
 
     class Meta:
         model = BorrowingRepayment
-        fields = ["id", "borrowing", "amount", "date", "paying_account", "notes"]
+        fields = ["id", "borrowing", "amount", "fee_amount", "date", "paying_account", "notes"]
 
     def create(self, validated_data):
         from apps.debts.services import record_borrowing_repayment

@@ -9,40 +9,126 @@ from apps.accounts.services import bulk_account_balances
 from apps.bills.models import RecurringBill
 from apps.budgets.models import Budget
 from apps.closing.services import day_breakdown
+from apps.core.currency import format_money
 from apps.debts.models import Borrowing, Lending
 from apps.goals.models import SavingsGoal
 from apps.goals.services import savings_target_calculator
 from apps.reports.services import compute_monthly_report
 
+ANALYSIS_URL_NAME = "reports:income_vs_expenses"
 
-def health_warnings(user, report, goals):
+
+def resolve_month(value, today=None):
+    """Parse a `YYYY-MM` dashboard month selector. Anything unparseable or
+    out of a sane range falls back to the current month rather than erroring —
+    this is a display filter, not a data write."""
+    if today is None:
+        today = timezone.localdate()
+    if value:
+        try:
+            year_str, month_str = value.split("-")
+            year, month = int(year_str), int(month_str)
+            if 2000 <= year <= 2100 and 1 <= month <= 12:
+                return year, month
+        except (ValueError, AttributeError):
+            pass
+    return today.year, today.month
+
+
+def month_links(year, month, today=None):
+    if today is None:
+        today = timezone.localdate()
+    first = date(year, month, 1)
+    previous = first - relativedelta(months=1)
+    following = first + relativedelta(months=1)
+    return {
+        "previous": previous.strftime("%Y-%m"),
+        "next": following.strftime("%Y-%m"),
+        "next_disabled": following > today,
+    }
+
+
+def health_warnings(user, report, goals, *, month_label=None, month_is_current=True):
+    """Each warning carries the page that explains it, so the dashboard figure
+    is never a dead end (Phase 13, improvement 1: the "expenses exceed income"
+    line has to be clickable, not just asserted)."""
+    from django.urls import reverse
+
     warnings = []
-    if report["total_expenses"] > report["total_income"] and report["total_income"] > 0:
-        warnings.append("Your expenses exceeded your income this month.")
+    analysis_url = reverse(ANALYSIS_URL_NAME)
+    income = report["total_income"]
+    expenses = report["total_expenses"]
+
+    if expenses > income and (income > 0 or expenses > 0):
+        shortfall = expenses - income
+        when = "this month" if month_is_current else (month_label or "this month")
+        warnings.append(
+            {
+                "text": (
+                    f"Your expenses exceed your income {when} by "
+                    f"{format_money(shortfall, user.profile.currency_code)}."
+                ),
+                "url": analysis_url,
+                "link_text": "See where the money went",
+            }
+        )
 
     overdue_borrowings = [b for b in Borrowing.objects.filter(user=user, status=Borrowing.Status.ACTIVE) if b.is_overdue()]
     if overdue_borrowings:
-        warnings.append(f"You have {len(overdue_borrowings)} overdue repayment(s) to lenders.")
+        warnings.append(
+            {"text": f"You have {len(overdue_borrowings)} overdue repayment(s) to lenders.", "url": None, "link_text": None}
+        )
 
-    overdue_lendings = [l for l in Lending.objects.filter(user=user, status=Lending.Status.ACTIVE) if l.is_overdue()]
+    overdue_lendings = [lend for lend in Lending.objects.filter(user=user, status=Lending.Status.ACTIVE) if lend.is_overdue()]
     if overdue_lendings:
-        warnings.append(f"{len(overdue_lendings)} borrower(s) have overdue repayments owed to you.")
+        warnings.append(
+            {
+                "text": f"{len(overdue_lendings)} borrower(s) have overdue repayments owed to you.",
+                "url": None,
+                "link_text": None,
+            }
+        )
 
     for budget in Budget.objects.filter(user=user, month=report["start"]):
         if budget.percent_used() >= 100:
-            warnings.append(f"Your '{budget.category.name}' budget is fully used ({budget.percent_used()}%).")
+            warnings.append(
+                {
+                    "text": f"Your '{budget.category.name}' budget is fully used ({budget.percent_used()}%).",
+                    "url": None,
+                    "link_text": None,
+                }
+            )
 
     for goal in goals:
         if goal.status != SavingsGoal.Status.ACTIVE or not goal.deadline:
             continue
         calc = savings_target_calculator(goal)
         if calc["shortfall"] and calc["shortfall"] > 0:
-            warnings.append(f"Your current savings pace is below target for '{goal.name}'.")
+            warnings.append(
+                {
+                    "text": f"Your current savings pace is below target for '{goal.name}'.",
+                    "url": None,
+                    "link_text": None,
+                }
+            )
+
+    if report.get("accounts_missing_opening_date"):
+        warnings.append(
+            {
+                "text": (
+                    f"{report['accounts_missing_opening_date']} account(s) have no opening-balance date, so "
+                    "historical entries can still change today's balance."
+                ),
+                "url": reverse("accounts:reconciliation"),
+                "link_text": "Review balances",
+            }
+        )
 
     return warnings
 
 
 TREND_PERIOD_CHOICES = [
+    ("24h", "Last 24 Hours"),
     ("7d", "Last 7 Days"),
     ("30d", "Last 30 Days"),
     ("3m", "Last 3 Months"),
@@ -55,6 +141,17 @@ TREND_PERIOD_CHOICES = [
 ]
 TREND_PERIOD_LABELS = dict(TREND_PERIOD_CHOICES)
 TREND_DEFAULT_PERIOD = "6m"
+
+#: Honest statement of what "Last 24 Hours" can and cannot mean here. A
+#: Transaction/AccountPosting stores a calendar `date` only — no wall-clock
+#: time — so a true rolling 24-hour window genuinely cannot be reconstructed.
+#: Rather than fabricate an hourly curve (or, worse, use `created_at` as if it
+#: were when the money moved), the 24-hour option reports today's calendar-day
+#: total and says so, in the chart title and under it.
+TREND_24H_NOTE = (
+    "Your transactions are recorded by calendar date, not by time of day, so this shows "
+    "everything recorded today rather than an exact rolling 24-hour window."
+)
 
 
 def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
@@ -73,7 +170,11 @@ def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
         period = period if period in TREND_PERIOD_LABELS and period != "custom" else TREND_DEFAULT_PERIOD
         start_date = end_date = None
 
-    if period == "7d":
+    if period == "24h":
+        # See TREND_24H_NOTE: only a calendar day is knowable, so "last 24
+        # hours" is honestly reported as today.
+        end_date = start_date = today
+    elif period == "7d":
         end_date, start_date = today, today - timedelta(days=6)
     elif period == "30d":
         end_date, start_date = today, today - timedelta(days=29)
@@ -100,7 +201,7 @@ def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
 
     span_days = (end_date - start_date).days
 
-    if period in ("7d", "30d"):
+    if period in ("24h", "7d", "30d"):
         granularity = "day"
     elif period == "custom":
         granularity = "day" if span_days <= 62 else "month" if span_days <= 730 else "year"
@@ -116,7 +217,7 @@ def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
         d = start_date
         while d <= end_date:
             total = base_qs.filter(date=d).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-            labels.append(d.strftime("%d %b"))
+            labels.append("Today" if period == "24h" else d.strftime("%d %b"))
             totals.append(float(total))
             d += timedelta(days=1)
     elif granularity == "month":
@@ -138,6 +239,8 @@ def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
 
     if period == "custom":
         title = f"Spending trend ({start_date.strftime('%d %b %Y')} – {end_date.strftime('%d %b %Y')})"
+    elif period == "24h":
+        title = "Spending trend (Last 24 Hours — today so far)"
     else:
         title = f"Spending trend ({TREND_PERIOD_LABELS[period]})"
 
@@ -145,26 +248,33 @@ def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
         "labels": labels,
         "totals": totals,
         "title": title,
+        "note": TREND_24H_NOTE if period == "24h" else None,
         "period": period,
         "start": start_date.isoformat(),
         "end": end_date.isoformat(),
     }
 
 
-def compute_dashboard(user):
+def compute_dashboard(user, month_param=None):
     today = timezone.localdate()
+    year, month = resolve_month(month_param, today)
     accounts = FinancialAccount.objects.filter(user=user, status=FinancialAccount.Status.ACTIVE)
     balances = bulk_account_balances(user, accounts)
     total_balance = sum(balances.values(), Decimal("0.00"))
 
     today_breakdown = day_breakdown(user, today)
-    report = compute_monthly_report(user, today.year, today.month)
+    # Exactly one monthly aggregation for the whole page: the comparison card
+    # and the warning text read the same dict, so they can never disagree.
+    report = compute_monthly_report(user, year, month)
+    month_label = report["start"].strftime("%B %Y")
+    month_is_current = (year, month) == (today.year, today.month)
+    report["accounts_missing_opening_date"] = sum(1 for account in accounts if account.opening_balance_date is None)
 
     goals = list(SavingsGoal.objects.filter(user=user, status=SavingsGoal.Status.ACTIVE))
     upcoming_bills = [b for b in RecurringBill.objects.filter(user=user, status=RecurringBill.Status.ACTIVE) if b.is_due_soon(7) or b.is_overdue()]
     overdue_bills = [b for b in upcoming_bills if b.is_overdue()]
 
-    warnings = health_warnings(user, report, goals)
+    warnings = health_warnings(user, report, goals, month_label=month_label, month_is_current=month_is_current)
     profile = user.profile
     trend = spending_trend(
         user,
@@ -183,6 +293,11 @@ def compute_dashboard(user):
         "today_net": today_breakdown["net"],
         "monthly_income": report["total_income"],
         "monthly_expenses": report["total_expenses"],
+        "monthly_difference": report["total_income"] - report["total_expenses"],
+        "month_value": f"{year:04d}-{month:02d}",
+        "month_label": month_label,
+        "month_is_current": month_is_current,
+        "month_links": month_links(year, month, today),
         "money_owed_by_me": sum((b.outstanding() for b in Borrowing.objects.filter(user=user, status=Borrowing.Status.ACTIVE)), Decimal("0.00")),
         "money_owed_to_me": sum((l.outstanding() for l in Lending.objects.filter(user=user, status=Lending.Status.ACTIVE)), Decimal("0.00")),
         "upcoming_bills": upcoming_bills,
@@ -192,8 +307,10 @@ def compute_dashboard(user):
         "trend_labels": trend["labels"],
         "trend_totals": trend["totals"],
         "trend_title": trend["title"],
+        "trend_note": trend.get("note"),
         "trend_period": trend["period"],
         "trend_start": profile.dashboard_trend_start,
         "trend_end": profile.dashboard_trend_end,
         "trend_period_choices": TREND_PERIOD_CHOICES,
     }
+

@@ -15,6 +15,13 @@
 </div>
 {% if borrowing.debt_type != 'cash_loan' %}
 <p class="text-xs text-slate-500 mb-4">This is a noncash obligation — recording it did not increase your available cash. Only repayments reduce your cash.</p>
+{% elif not borrowing.receipt_affects_current_balance %}
+<div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-xs text-slate-600 dark:text-slate-300 mb-4">
+  You borrowed this money on {{ borrowing.date_borrowed }}, before this account's opening-balance date
+  ({{ borrowing.receiving_account.opening_balance_date }}). That cash is already part of the opening balance, so this
+  record increases what you owe but <span class="font-medium">not</span> your current available balance. Repayments you
+  make from now on do reduce the account balance.
+</div>
 {% endif %}
 <div class="grid sm:grid-cols-3 gap-4 mb-6">
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
@@ -34,6 +41,7 @@
     <form method="post" novalidate>
       {% csrf_token %}
       {% include "base/_field.html" with field=form.amount %}
+      {% include "base/_field.html" with field=form.fee_amount %}
       {% include "base/_field.html" with field=form.date %}
       {% include "base/_field.html" with field=form.paying_account %}
       {% include "base/_field.html" with field=form.notes %}
@@ -44,8 +52,25 @@
     <h2 class="font-semibold mb-3">Repayment history</h2>
     <div class="space-y-2">
       {% for r in borrowing.repayments.all %}
-      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm flex justify-between">
-        <span>{{ r.date }} · {{ r.paying_account.name }}</span><span class="font-medium">{{ r.amount|money }}</span>
+      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm">
+        <div class="flex justify-between gap-2">
+          <span>{{ r.date }} · {{ r.paying_account.name }}</span>
+          <span class="font-medium whitespace-nowrap">{{ r.amount|money }}</span>
+        </div>
+        {% if r.fee_amount %}
+        <div class="flex justify-between gap-2 text-xs text-slate-500 mt-0.5">
+          <span>Transaction fee (not part of the debt repaid)</span>
+          <span>{{ r.fee_amount|money }}</span>
+        </div>
+        <div class="flex justify-between gap-2 text-xs text-slate-500">
+          <span>Cash actually deducted</span><span>{{ r.total_cash_out|money }}</span>
+        </div>
+        {% endif %}
+        {% if r.notes %}<p class="text-xs text-slate-500 mt-1">{{ r.notes }}</p>{% endif %}
+        <div class="flex gap-3 mt-1 text-xs">
+          <a href="{% url 'debts:repayment_update' r.pk %}" class="text-brand-600">Edit</a>
+          <a href="{% url 'debts:repayment_delete' r.pk %}" class="text-red-600">Delete</a>
+        </div>
       </div>
       {% empty %}<p class="text-slate-500 text-sm">No repayments yet.</p>{% endfor %}
     </div>

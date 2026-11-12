@@ -1,0 +1,121 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}{{ date }} · Income vs Expenses · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="reports:income_vs_expenses" %}
+<div class="flex items-start justify-between mb-4 flex-wrap gap-2">
+  <div class="min-w-0">
+    <h1 class="text-xl font-semibold">{{ date|date:"l, d F Y" }}</h1>
+    <p class="text-sm text-slate-500">Everything recorded on this day</p>
+  </div>
+</div>
+
+{% if detail %}
+<div class="grid sm:grid-cols-3 gap-4 mb-4">
+  <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+    <p class="text-xs text-green-700">Money received</p><p class="text-xl font-bold text-green-700">{{ detail.received|money }}</p>
+  </div>
+  <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+    <p class="text-xs text-red-700">Money spent</p><p class="text-xl font-bold text-red-700">{{ detail.spent|money }}</p>
+  </div>
+  <div class="rounded-xl p-4 border {% if detail.difference < 0 %}bg-red-50 border-red-200{% elif detail.difference > 0 %}bg-green-50 border-green-200{% else %}bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700{% endif %}">
+    <p class="text-xs text-slate-500">Difference</p>
+    <p class="text-xl font-bold {% if detail.difference < 0 %}text-red-700{% elif detail.difference > 0 %}text-green-700{% endif %}">{% if detail.difference > 0 %}+{% endif %}{{ detail.difference|money }}</p>
+  </div>
+</div>
+<p class="text-sm mb-6 {% if detail.difference < 0 %}text-red-700{% elif detail.difference > 0 %}text-green-700{% else %}text-slate-600 dark:text-slate-300{% endif %}">{{ detail.message }}</p>
+
+<div class="grid lg:grid-cols-2 gap-6 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Spending by category</h2>
+    {% for name, total in detail.by_category %}
+    <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0"><span>{{ name }}</span><span>{{ total|money }}</span></div>
+    {% empty %}<p class="text-sm text-slate-500">No categorized spending on this day.</p>{% endfor %}
+  </div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Spending by account</h2>
+    {% for name, total in detail.by_account %}
+    <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0"><span>{{ name }}</span><span>{{ total|money }}</span></div>
+    {% empty %}<p class="text-sm text-slate-500">No money left any account on this day.</p>{% endfor %}
+  </div>
+</div>
+
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 mb-6">
+  <h2 class="font-semibold mb-3">Fees charged</h2>
+  {% for line in detail.fee_lines %}
+  <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0"><span>{{ line.label }}</span><span>{{ line.amount|money }}</span></div>
+  {% empty %}<p class="text-sm text-slate-500">No bank or mobile money fees on this day.</p>{% endfor %}
+  {% if detail.fee_lines %}
+  <div class="flex justify-between text-sm py-1 mt-1 font-medium"><span>Total fees</span><span>{{ detail.fee_total|money }}</span></div>
+  {% endif %}
+</div>
+
+
+<div class="grid lg:grid-cols-2 gap-6 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Money received</h2>
+    {% for t in detail.income_transactions %}
+    <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
+      <div class="flex justify-between gap-2"><span class="min-w-0 break-words">{{ t.description|default:"Income" }}{% if t.category %} · {{ t.category.name }}{% endif %}</span><span class="whitespace-nowrap text-green-700">{{ t.amount|money }}</span></div>
+      <p class="text-xs text-slate-500">{{ t.account.name }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }}{% endif %}</p>
+    </div>
+    {% endfor %}
+    {% for b in detail.borrowings_received %}
+    <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
+      <div class="flex justify-between gap-2"><span class="min-w-0 break-words">Cash loan from {{ b.lender_name }}</span><span class="whitespace-nowrap text-green-700">{{ b.amount|money }}</span></div>
+      <p class="text-xs text-slate-500">{{ b.receiving_account.name }} · cash in, not income</p>
+    </div>
+    {% endfor %}
+    {% for r in detail.lending_repayments %}
+    <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
+      <div class="flex justify-between gap-2"><span class="min-w-0 break-words">Repayment from {{ r.lending.borrower_name }}</span><span class="whitespace-nowrap text-green-700">{{ r.total_received|money }}</span></div>
+      <p class="text-xs text-slate-500">{{ r.receiving_account.name }}{% if r.interest_amount %} · includes {{ r.interest_amount|money }} interest{% endif %}</p>
+    </div>
+    {% endfor %}
+    {% if not detail.income_transactions and not detail.borrowings_received and not detail.lending_repayments %}
+    <p class="text-sm text-slate-500">No money was received on this day.</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    <h2 class="font-semibold mb-3">Money spent</h2>
+    {% for t in detail.expense_transactions %}
+    <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
+      <div class="flex justify-between gap-2"><span class="min-w-0 break-words">{{ t.description|default:"Expense" }}{% if t.category %} · {{ t.category.name }}{% endif %}</span><span class="whitespace-nowrap text-red-700">{{ t.amount|money }}</span></div>
+      <p class="text-xs text-slate-500">{{ t.account.name }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }} · cash out {{ t.cash_out|money }}{% endif %}</p>
+    </div>
+    {% endfor %}
+    {% for r in detail.repayments %}
+    <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
+      <div class="flex justify-between gap-2"><span class="min-w-0 break-words">Debt repayment to {{ r.borrowing.lender_name }}</span><span class="whitespace-nowrap text-red-700">{{ r.amount|money }}</span></div>
+      <p class="text-xs text-slate-500">{{ r.paying_account.name }}{% if r.fee_amount %} · fee {{ r.fee_amount|money }} · cash out {{ r.total_cash_out|money }}{% endif %}</p>
+    </div>
+    {% endfor %}
+    {% for lend in detail.lendings_sent %}
+    <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
+      <div class="flex justify-between gap-2"><span class="min-w-0 break-words">Money lent to {{ lend.borrower_name }}</span><span class="whitespace-nowrap text-red-700">{{ lend.amount|money }}</span></div>
+      <p class="text-xs text-slate-500">{{ lend.source_account.name }} · not an expense</p>
+    </div>
+    {% endfor %}
+    {% if not detail.expense_transactions and not detail.repayments and not detail.lendings_sent %}
+    <p class="text-sm text-slate-500">No money was spent on this day.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if detail.transfers %}
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+  <h2 class="font-semibold mb-3">Internal transfers (not counted as in or out)</h2>
+  {% for transfer in detail.transfers %}
+  <div class="flex justify-between gap-2 text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+    <span class="min-w-0 break-words">{{ transfer.from_account.name }} &rarr; {{ transfer.to_account.name }}{% if transfer.description %} · {{ transfer.description }}{% endif %}</span>
+    <span class="whitespace-nowrap">{{ transfer.amount|money }}{% if transfer.fee_amount %} (+{{ transfer.fee_amount|money }} fee){% endif %}</span>
+  </div>
+  {% endfor %}
+  <p class="text-xs text-slate-500 mt-2">Moving money between your own accounts changes which account holds it, not how much you have. Only the fee is a real cost.</p>
+</div>
+{% endif %}
+{% else %}
+<p class="text-sm text-slate-500">That date could not be read.</p>
+{% endif %}
+{% endblock %}

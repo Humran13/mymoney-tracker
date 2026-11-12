@@ -5,6 +5,7 @@
 <div class="w-full max-w-2xl bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-8">
   <h1 class="text-2xl font-bold text-brand-700 dark:text-brand-500 mb-1">Let's set up your money</h1>
   <p class="text-sm text-slate-500 mb-6">Add the real accounts you use today — cash, bank, mobile money — with their actual current balances. Don't make up numbers; this is where your real tracking starts.</p>
+  <p class="text-xs text-slate-500 mb-6">The <span class="font-medium">balance date</span> is what makes balances stay correct later: it says "this was the money in this account at the start of that day". Anything you record for an earlier date stays as history and won't be added on top of this balance.</p>
   <form method="post" novalidate>
     {% csrf_token %}
     {{ formset.management_form }}
@@ -15,6 +16,7 @@
           {% include "base/_field.html" with field=form.name %}
           {% include "base/_field.html" with field=form.account_type %}
           {% include "base/_field.html" with field=form.opening_balance %}
+          {% include "base/_field.html" with field=form.opening_balance_date %}
           {% include "base/_field.html" with field=form.description %}
         </div>
         {{ form.id }}

@@ -9,7 +9,7 @@ from apps.core.audit import log_audit_event
 
 from . import services
 from .forms import BorrowingForm, BorrowingReclassifyForm, BorrowingRepaymentForm, LendingForm, LendingRepaymentForm
-from .models import Borrowing, Lending
+from .models import Borrowing, BorrowingRepayment, Lending
 
 
 @login_required
@@ -97,6 +97,47 @@ def borrowing_delete(request, pk):
         messages.success(request, "Borrowing record deleted.")
         return redirect("debts:dashboard")
     return render(request, "debts/borrowing_delete_confirm.html", {"borrowing": borrowing})
+
+
+@login_required
+def repayment_update(request, pk):
+    """Edit a repayment. Both the principal posting and the optional
+    transaction-fee posting are rebuilt from scratch by sync_postings, so
+    editing can neither duplicate nor orphan a fee."""
+    repayment = get_object_or_404(
+        BorrowingRepayment.objects.select_related("borrowing", "paying_account"), pk=pk, user=request.user
+    )
+    borrowing = repayment.borrowing
+    if request.method == "POST":
+        form = BorrowingRepaymentForm(request.POST, user=request.user, borrowing=borrowing, instance=repayment)
+        if form.is_valid():
+            try:
+                services.update_borrowing_repayment(repayment, **form.cleaned_data)
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                log_audit_event(request.user, "update", obj=repayment, description="Edited debt repayment")
+                messages.success(request, "Repayment updated.")
+                return redirect("debts:borrowing_detail", pk=borrowing.pk)
+    else:
+        form = BorrowingRepaymentForm(user=request.user, borrowing=borrowing, instance=repayment)
+    return render(
+        request,
+        "debts/repayment_form.html",
+        {"form": form, "borrowing": borrowing, "repayment": repayment, "mode": "edit"},
+    )
+
+
+@login_required
+def repayment_delete(request, pk):
+    repayment = get_object_or_404(BorrowingRepayment, pk=pk, user=request.user)
+    borrowing = repayment.borrowing
+    if request.method == "POST":
+        services.delete_borrowing_repayment(repayment)
+        log_audit_event(request.user, "delete", obj=borrowing, description="Deleted debt repayment")
+        messages.success(request, "Repayment deleted and balances recalculated.")
+        return redirect("debts:borrowing_detail", pk=borrowing.pk)
+    return render(request, "debts/repayment_delete_confirm.html", {"repayment": repayment, "borrowing": borrowing})
 
 
 @login_required

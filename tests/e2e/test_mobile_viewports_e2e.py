@@ -96,3 +96,40 @@ def test_monthly_report_table_scrolls_instead_of_overflowing_page(signed_in_page
     page.goto(f"{live_server.url}/reports/")
     page.wait_for_load_state("networkidle")
     _assert_no_horizontal_overflow(page, width)
+
+
+@pytest.mark.parametrize("width", MOBILE_WIDTHS)
+def test_monthly_comparison_card_has_no_overflow_on_mobile(signed_in_page, live_server, width):
+    page, user, account = signed_in_page
+    page.set_viewport_size({"width": width, "height": 800})
+    page.goto(live_server.url + "/")
+    page.wait_for_load_state("networkidle")
+    assert "Income" in page.inner_text("body")
+    _assert_no_horizontal_overflow(page, width)
+
+
+@pytest.mark.parametrize("width", MOBILE_WIDTHS)
+def test_income_vs_expenses_page_has_no_overflow_on_mobile(signed_in_page, live_server, width):
+    page, user, account = signed_in_page
+    page.set_viewport_size({"width": width, "height": 800})
+    page.goto(f"{live_server.url}/reports/income-vs-expenses/")
+    page.wait_for_load_state("networkidle")
+    assert "Income vs Expenses Analysis" in page.inner_text("h1")
+    _assert_no_horizontal_overflow(page, width)
+
+    # The daily-breakdown table (30-day view) must scroll inside its card
+    # rather than widening the whole page.
+    page.select_option("#preset", "30d")
+    submit_and_wait(page)
+    page.wait_for_load_state("networkidle")
+    _assert_no_horizontal_overflow(page, width)
+
+
+@pytest.mark.parametrize("width", MOBILE_WIDTHS)
+def test_reconciliation_page_has_no_overflow_on_mobile(signed_in_page, live_server, width):
+    page, user, account = signed_in_page
+    page.set_viewport_size({"width": width, "height": 800})
+    page.goto(f"{live_server.url}/accounts/reconciliation/")
+    page.wait_for_load_state("networkidle")
+    assert "Opening balance reconciliation" in page.inner_text("h1")
+    _assert_no_horizontal_overflow(page, width)
