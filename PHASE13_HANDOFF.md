@@ -278,10 +278,12 @@ reports **no changes detected** after them.
 **Unit / integration (SQLite, `pytest tests/ --ignore=tests/e2e -q`)**
 
 ```
-242 passed
+243 passed
 ```
 
-Baseline before this phase was 136 passed, so **106 new tests** were added:
+Baseline before this phase was 136 passed, so **107 new tests** were added.
+The whole tree in CI order (`pytest tests/ --browser chromium`, i.e. the
+Playwright suite first) is **318 passed**.
 
 | File | Covers |
 |---|---|
@@ -310,6 +312,23 @@ reachable and read-only; no horizontal overflow on the new pages at 320–430px.
 **Settings:** `manage.py check` → *no issues*.
 **CSS:** `npm run build:css` rebuilt after the template changes (the compiled
 file is git-ignored and built inside the Docker image).
+
+### Lesson learned here (worth not repeating)
+
+The first CI run of this phase failed 7 tests on PostgreSQL that passed locally:
+`DefaultExpenseCategoryTests` expected the Charity/Shipping Fees rows created by
+`transactions.0003`. Locally I had run `pytest tests/ --ignore=tests/e2e`, so
+those rows existed. On CI the **Playwright tests run first** (`tests/e2e/`
+sorts before `tests/test_*`), every `live_server` test uses
+`transactional_db`, and each one **flushes** the database — which also discards
+rows created by data migrations (Django does not replay data migrations after a
+flush). Any test that depends on migration-seeded rows is therefore
+order-dependent and will pass locally while failing in CI.
+
+Fix: those tests now call the migration's own function in `setUp`
+(`run_default_category_migration()`), and a dedicated test proves the migration
+is idempotent. The general rule: **unit tests must create their own data; never
+assume a data migration's rows are present.**
 
 ---
 

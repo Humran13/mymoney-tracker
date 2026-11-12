@@ -31,8 +31,8 @@ See `PHASE13_HANDOFF.md` for the full record.
   must take explicitly.
 - Internal transfers no longer inflate the dashboard's / Daily Closing's
   "received" and "spent" figures (only the transfer fee counts).
-- **Tests:** 242 unit/integration (was 136) and 75 browser tests on Chromium
-  (plus the new Phase 13 E2E suite on Firefox and WebKit) — all passing.
+- **Tests:** 243 unit/integration (was 136) and 318 across the whole tree in CI
+  order (Chromium); the new Phase 13 E2E suite also passes on Firefox and WebKit.
   `ruff` clean, `manage.py check` clean.
 - **Deployment: pending.** See `PHASE13_HANDOFF.md` §8 for the exact, previously
   used backup → migrate → verify sequence.

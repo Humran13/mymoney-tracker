@@ -7,7 +7,9 @@
 
 import datetime
 from decimal import Decimal
+from importlib import import_module
 
+from django.apps import apps as django_apps
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -22,6 +24,18 @@ from apps.transactions.services import create_transaction
 from apps.users.models import User
 
 TODAY = timezone.localdate()
+
+
+def run_default_category_migration():
+    """Run the *real* migration function, against the real models.
+
+    Migrations' `apps` argument only needs `get_model`, which the global app
+    registry provides — so this executes the shipped code path, not a copy of
+    it. Used by tests because a database flush (which every `live_server` E2E
+    test performs) drops data-migration rows.
+    """
+    module = import_module("apps.transactions.migrations.0003_default_charity_and_shipping_categories")
+    module.add_default_categories(django_apps, None)
 
 
 class Last24HoursTrendTests(TestCase):
@@ -102,16 +116,34 @@ class Last24HoursTrendTests(TestCase):
 class DefaultExpenseCategoryTests(TestCase):
     """The migration installs both categories for every user at once (they are
     global, user=None), so no per-user data migration is needed — and no user's
-    own custom categories are touched."""
+    own custom categories are touched.
+
+    NOTE ON TEST ISOLATION: rows created by a data migration are **not**
+    restored after a database flush, and every Playwright `live_server` test
+    flushes the DB. Since CI collects `tests/e2e/` before `tests/test_*`, the
+    migration-seeded rows are gone by the time these run. `setUp` therefore
+    re-runs the migration's own function, so these tests prove the same thing
+    without depending on collection order. (`seed_categories` does the
+    equivalent for a real deployment after a flush.)
+    """
 
     def setUp(self):
         self.user = User.objects.create_user(email="cats@example.com", password="StrongPass123!")
+        run_default_category_migration()
 
     def test_charity_category_exists_globally(self):
         self.assertTrue(Category.objects.filter(user__isnull=True, name="Charity", kind="expense").exists())
 
     def test_shipping_fees_category_exists_globally(self):
         self.assertTrue(Category.objects.filter(user__isnull=True, name="Shipping Fees", kind="expense").exists())
+
+    def test_migration_creates_both_categories_idempotently(self):
+        # Start from a clean table so this really exercises the migration.
+        Category.objects.all().delete()
+        run_default_category_migration()
+        run_default_category_migration()
+        self.assertEqual(Category.objects.filter(user__isnull=True, name="Charity", kind="expense").count(), 1)
+        self.assertEqual(Category.objects.filter(user__isnull=True, name="Shipping Fees", kind="expense").count(), 1)
 
     def test_no_duplicate_categories_even_after_reseeding(self):
         call_command("seed_categories", verbosity=0)
