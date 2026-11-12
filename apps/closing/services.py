@@ -3,29 +3,30 @@ from decimal import Decimal
 
 from django.db.models import Sum
 
-from apps.accounts.models import AccountPosting, FinancialAccount
+from apps.accounts.models import AccountPosting, FinancialAccount, balance_start_date
 
 
 def balance_as_of(user, date):
-    """Total balance across active accounts, counting only postings dated
-    on or before `date` and respecting each account's own opening-balance
-    cutoff — used to reconstruct a historical day's opening and closing
-    position without storing a mutable snapshot.
+    """Total balance across active accounts as of `date`, counting only
+    postings inside each account's starting window — used to reconstruct a
+    historical day's opening and closing position without storing a mutable
+    snapshot.
 
-    Returns None if `date` falls before any active account's
-    opening_balance_date: the opening_balance figure is only known to be
-    true as of that cutoff, so any total computed for an earlier date would
-    either double-count pre-cutoff postings already baked into
-    opening_balance, or invent a number that was never actually recorded.
-    Callers must show "balance unavailable" rather than a 0 or a guess."""
+    Returns None if `date` falls before any active account's starting date
+    (declared, or derived from when the account was created): the
+    opening_balance figure is only known to be true from that date onwards, so
+    any total computed for an earlier date would either double-count postings
+    already baked into opening_balance, or invent a number that was never
+    actually recorded. Callers must show "balance unavailable" rather than a 0
+    or a guess."""
     accounts = list(FinancialAccount.objects.filter(user=user, status=FinancialAccount.Status.ACTIVE))
-    if any(a.opening_balance_date and date < a.opening_balance_date for a in accounts):
+    if any(date < balance_start_date(a) for a in accounts):
         return None
     total = Decimal("0.00")
     for account in accounts:
-        postings = AccountPosting.objects.filter(user=user, account=account, occurred_on__lte=date)
-        if account.opening_balance_date is not None:
-            postings = postings.filter(occurred_on__gte=account.opening_balance_date)
+        postings = AccountPosting.objects.filter(
+            user=user, account=account, occurred_on__gte=balance_start_date(account), occurred_on__lte=date
+        )
         posted = postings.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
         total += account.opening_balance + posted
     return total

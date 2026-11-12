@@ -180,10 +180,10 @@ class LoanClassificationCases(TestCase):
         self.assertEqual(account_balance(self.wallet), Decimal("500000.00"))
 
 
-class NullCutoffAndReconciliationTests(TestCase):
+class AutomaticStartDateTests(TestCase):
     """Existing accounts with `opening_balance_date IS NULL` (every account in
-    production before Phase 11) keep the legacy include-everything behavior —
-    which is precisely why those accounts need the read-only review workflow."""
+    production before Phase 11) now get their boundary automatically from the
+    day the account was added — no user action, no data migration."""
 
     def setUp(self):
         self.user = User.objects.create_user(email="legacy@example.com", password="StrongPass123!")
@@ -205,11 +205,14 @@ class NullCutoffAndReconciliationTests(TestCase):
             receiving_account=self.legacy,
         )
 
-    def test_null_cutoff_still_double_counts_the_historical_loan(self):
-        # Documents the bug, not the fix: with no snapshot date there is no
-        # cutoff to exclude the pre-tracking receipt.
+    def test_historical_loan_never_inflates_balance_without_a_declared_date(self):
         self._make_historical_loan()
-        self.assertEqual(account_balance(self.legacy), Decimal("1792000.00"))
+        self.assertIsNone(self.legacy.opening_balance_date)
+        self.assertEqual(account_balance(self.legacy), Decimal("500000.00"))
+
+    def test_start_date_is_derived_from_when_the_account_was_added(self):
+        self.assertEqual(self.legacy.balance_start_date, datetime.date.today())
+        self.assertFalse(self.legacy.balance_start_is_declared)
 
     def test_preview_is_read_only(self):
         borrowing = self._make_historical_loan()
@@ -219,7 +222,8 @@ class NullCutoffAndReconciliationTests(TestCase):
 
         preview = reconciliation_preview(self.user)
 
-        self.assertEqual(preview["needs_review_count"], 1)
+        self.assertEqual(preview["with_history_count"], 1)
+        self.assertEqual(preview["derived_count"], 1)
         row = preview["accounts"][0]
         self.assertGreaterEqual(len(row["historical_cash_loans"]), 1)
         self.assertEqual(row["current_balance"], before_balance)
@@ -234,41 +238,14 @@ class NullCutoffAndReconciliationTests(TestCase):
         self.assertFalse(AuditEvent.objects.filter(object_id=str(self.legacy.pk)).exists())
         self.assertEqual(Borrowing.objects.get(pk=borrowing.pk).amount, Decimal("1292000.00"))
 
-    def test_apply_snapshot_date_fixes_the_balance_and_is_audited(self):
-        borrowing = self._make_historical_loan()
-        result = apply_opening_snapshot_date(account=self.legacy, new_date=SNAPSHOT, actor=self.user)
-
-        self.assertEqual(result["balance_before"], Decimal("1792000.00"))
-        self.assertEqual(result["balance_after"], Decimal("500000.00"))
-        self.assertEqual(result["difference"], Decimal("-1292000.00"))
-        self.assertEqual(account_balance(self.legacy), Decimal("500000.00"))
-        # The debt is untouched, and so is the loan record itself.
-        self.assertEqual(borrowing.outstanding(), Decimal("1292000.00"))
-        self.legacy.refresh_from_db()
-        self.assertEqual(self.legacy.opening_balance, Decimal("500000.00"))
-        self.assertEqual(self.legacy.opening_balance_date, SNAPSHOT)
-        event = AuditEvent.objects.filter(object_id=str(self.legacy.pk), object_type="FinancialAccount").first()
-        self.assertIsNotNone(event)
-        self.assertEqual(event.metadata["balance_before"], "1792000.00")
-        self.assertEqual(event.metadata["balance_after"], "500000.00")
-
     def test_apply_then_repayment_matches_the_acceptance_test(self):
         borrowing = self._make_historical_loan()
-        apply_opening_snapshot_date(account=self.legacy, new_date=SNAPSHOT, actor=self.user)
         record_borrowing_repayment(
             user=self.user, borrowing=borrowing, amount=Decimal("100000.00"),
-            date=REPAYMENT_DATE, paying_account=self.legacy,
+            date=datetime.date.today(), paying_account=self.legacy,
         )
         self.assertEqual(account_balance(self.legacy), Decimal("400000.00"))
         self.assertEqual(borrowing.outstanding(), Decimal("1192000.00"))
-
-    def test_apply_is_reversible(self):
-        self._make_historical_loan()
-        apply_opening_snapshot_date(account=self.legacy, new_date=SNAPSHOT, actor=self.user)
-        self.assertEqual(account_balance(self.legacy), Decimal("500000.00"))
-        # Clearing the date restores the legacy behavior, exactly as before.
-        apply_opening_snapshot_date(account=self.legacy, new_date=None, actor=self.user)
-        self.assertEqual(account_balance(self.legacy), Decimal("1792000.00"))
 
     def test_preview_is_isolated_per_user(self):
         other = User.objects.create_user(email="other-legacy@example.com", password="StrongPass123!")
@@ -278,12 +255,39 @@ class NullCutoffAndReconciliationTests(TestCase):
         preview = reconciliation_preview(self.user)
         self.assertEqual([row["account"].name for row in preview["accounts"]], ["WALLET"])
 
-    def test_existing_transactions_before_snapshot_are_excluded_too(self):
+    def test_pre_tracking_spending_is_excluded_too(self):
         create_transaction(
             user=self.user, account=self.legacy, kind="expense", category=None,
             amount=Decimal("70000.00"), fee_amount=Decimal("0.00"),
             date=self.loan_date, description="Pre-tracking spend",
         )
+        # Already included in the 500,000 the user typed, so not subtracted again.
+        self.assertEqual(account_balance(self.legacy), Decimal("500000.00"))
+
+    def test_declaring_an_earlier_start_date_brings_history_back_in(self):
+        # The escape hatch: if that spending really is separate from the typed
+        # balance, the user can say so explicitly — audited, reversible, and
+        # never done for them.
+        create_transaction(
+            user=self.user, account=self.legacy, kind="expense", category=None,
+            amount=Decimal("70000.00"), fee_amount=Decimal("0.00"),
+            date=self.loan_date, description="Pre-tracking spend",
+        )
+        result = apply_opening_snapshot_date(account=self.legacy, new_date=self.loan_date, actor=self.user)
+        self.assertEqual(result["balance_before"], Decimal("500000.00"))
+        self.assertEqual(result["balance_after"], Decimal("430000.00"))
+        self.assertEqual(result["difference"], Decimal("-70000.00"))
         self.assertEqual(account_balance(self.legacy), Decimal("430000.00"))
-        apply_opening_snapshot_date(account=self.legacy, new_date=SNAPSHOT, actor=self.user)
+        event = AuditEvent.objects.filter(object_id=str(self.legacy.pk), object_type="FinancialAccount").first()
+        self.assertIsNotNone(event)
+
+    def test_clearing_a_declared_date_returns_to_the_automatic_one(self):
+        create_transaction(
+            user=self.user, account=self.legacy, kind="expense", category=None,
+            amount=Decimal("70000.00"), fee_amount=Decimal("0.00"),
+            date=self.loan_date, description="Pre-tracking spend",
+        )
+        apply_opening_snapshot_date(account=self.legacy, new_date=self.loan_date, actor=self.user)
+        self.assertEqual(account_balance(self.legacy), Decimal("430000.00"))
+        apply_opening_snapshot_date(account=self.legacy, new_date=None, actor=self.user)
         self.assertEqual(account_balance(self.legacy), Decimal("500000.00"))

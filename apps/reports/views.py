@@ -75,7 +75,10 @@ def monthly_report_csv(request):
         "opening_outstanding_debts", "closing_outstanding_debts",
         "opening_outstanding_receivables", "closing_outstanding_receivables", "savings_contributions",
     ]:
-        writer.writerow([key.replace("_", " ").title(), report[key]])
+        value = report[key]
+        # A balance before an account's starting date is genuinely unknown
+        # (None), not zero — never let it print as "None" in an export.
+        writer.writerow([key.replace("_", " ").title(), "" if value is None else value])
     writer.writerow([])
     writer.writerow(["Spending by category", "Amount (UGX)"])
     for row in report["spending_by_category"]:
@@ -104,18 +107,23 @@ def monthly_report_pdf(request):
         Spacer(1, 16),
     ]
 
+    def money(value):
+        # None means "before this account's starting date, so unknown" — say so
+        # instead of crashing or pretending it was 0.
+        return "not available" if value is None else f"{value:,.2f}"
+
     summary_rows = [
-        ["Total income", f"{report['total_income']:,.2f}"],
-        ["Total expenses", f"{report['total_expenses']:,.2f}"],
-        ["Net", f"{report['net']:,.2f}"],
-        ["Mobile money fees", f"{report['mobile_money_fees']:,.2f}"],
-        ["Opening balance", f"{report['opening_balance']:,.2f}"],
-        ["Closing balance", f"{report['closing_balance']:,.2f}"],
-        ["Money borrowed", f"{report['money_borrowed']:,.2f}"],
-        ["Money lent", f"{report['money_lent']:,.2f}"],
-        ["Outstanding debts (closing)", f"{report['closing_outstanding_debts']:,.2f}"],
-        ["Outstanding receivables (closing)", f"{report['closing_outstanding_receivables']:,.2f}"],
-        ["Savings contributions", f"{report['savings_contributions']:,.2f}"],
+        ["Total income", money(report["total_income"])],
+        ["Total expenses", money(report["total_expenses"])],
+        ["Net", money(report["net"])],
+        ["Mobile money fees", money(report["mobile_money_fees"])],
+        ["Opening balance", money(report["opening_balance"])],
+        ["Closing balance", money(report["closing_balance"])],
+        ["Money borrowed", money(report["money_borrowed"])],
+        ["Money lent", money(report["money_lent"])],
+        ["Outstanding debts (closing)", money(report["closing_outstanding_debts"])],
+        ["Outstanding receivables (closing)", money(report["closing_outstanding_receivables"])],
+        ["Savings contributions", money(report["savings_contributions"])],
     ]
     table = Table([["Metric", "Amount (UGX)"]] + summary_rows, colWidths=[260, 160])
     table.setStyle(

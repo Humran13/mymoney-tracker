@@ -76,11 +76,17 @@ class PeriodResolutionTests(TestCase):
 class CashFlowTotalsTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="flow@example.com", password="StrongPass123!")
+        # A declared start well before the transactions these tests create, so
+        # the window arithmetic is what is under test here (the date boundary
+        # itself is covered in the starting-balance tests).
+        self.start = TODAY - datetime.timedelta(days=90)
         self.wallet = FinancialAccount.objects.create(
-            user=self.user, name="Wallet", account_type="cash", opening_balance=Decimal("500000.00")
+            user=self.user, name="Wallet", account_type="cash", opening_balance=Decimal("500000.00"),
+            opening_balance_date=self.start,
         )
         self.bank = FinancialAccount.objects.create(
-            user=self.user, name="Bank", account_type="bank", opening_balance=Decimal("0.00")
+            user=self.user, name="Bank", account_type="bank", opening_balance=Decimal("0.00"),
+            opening_balance_date=self.start,
         )
         self.shopping = Category.objects.create(user=None, name="Shopping", kind="expense")
 

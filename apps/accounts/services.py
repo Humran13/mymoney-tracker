@@ -4,7 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import transaction as db_transaction
 from django.db.models import Sum
 
-from .models import AccountPosting, FinancialAccount, Transfer
+from .models import AccountPosting, FinancialAccount, Transfer, balance_start_date
 
 
 def sync_postings(source_obj, specs, *, user):
@@ -34,9 +34,14 @@ def delete_postings(source_obj):
 
 
 def account_balance(account: FinancialAccount) -> Decimal:
-    postings = account.postings.all()
-    if account.opening_balance_date is not None:
-        postings = postings.filter(occurred_on__gte=account.opening_balance_date)
+    """`opening_balance` plus every posting inside the account's starting
+    window (`balance_start_date`, declared or derived).
+
+    Postings dated before that window are history: they are already reflected
+    in the starting balance the user entered, so adding them again would invent
+    money that was spent long before tracking began.
+    """
+    postings = account.postings.filter(occurred_on__gte=balance_start_date(account))
     total = postings.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
     return account.opening_balance + total
 
@@ -44,26 +49,17 @@ def account_balance(account: FinancialAccount) -> Decimal:
 def bulk_account_balances(user, accounts=None) -> dict:
     accounts = accounts if accounts is not None else FinancialAccount.objects.filter(user=user)
     accounts = list(accounts)
-    # opening_balance_date differs per account, so the date cutoff can't be
-    # applied as a single shared queryset filter — split into accounts with
-    # a cutoff (one query each, cheap: there are only ever a handful of
-    # accounts per user) and accounts with none (one shared query).
+    # Each account has its own start date, so the cutoff can't be a single
+    # shared queryset filter. One aggregate per account: users only ever have a
+    # handful of accounts, and correctness here outranks micro-optimising.
     totals = {}
-    no_cutoff_ids = [a.id for a in accounts if a.opening_balance_date is None]
-    if no_cutoff_ids:
-        totals.update(
-            AccountPosting.objects.filter(user=user, account_id__in=no_cutoff_ids)
-            .values_list("account_id")
-            .annotate(total=Sum("amount"))
-        )
     for account in accounts:
-        if account.opening_balance_date is not None:
-            totals[account.id] = (
-                AccountPosting.objects.filter(
-                    user=user, account=account, occurred_on__gte=account.opening_balance_date
-                ).aggregate(total=Sum("amount"))["total"]
-                or Decimal("0.00")
-            )
+        totals[account.id] = (
+            AccountPosting.objects.filter(
+                user=user, account=account, occurred_on__gte=balance_start_date(account)
+            ).aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
     return {acc.id: acc.opening_balance + (totals.get(acc.id) or Decimal("0.00")) for acc in accounts}
 
 

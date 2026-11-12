@@ -202,9 +202,9 @@ class ReconciliationPageTests(TestCase):
     def test_page_renders_the_read_only_preview(self):
         response = self.client.get(reverse("accounts:reconciliation"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Opening balance reconciliation")
+        self.assertContains(response, "Your starting balances")
         self.assertContains(response, "Old Loan")
-        self.assertEqual(response.context["needs_review_count"], 1)
+        self.assertEqual(response.context["with_history_count"], 1)
 
     def test_preview_post_shows_the_projection_without_saving(self):
         response = self.client.post(

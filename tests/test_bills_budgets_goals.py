@@ -19,7 +19,8 @@ class RecurringBillTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(email="bill@example.com", password="StrongPass123!")
         self.account = FinancialAccount.objects.create(
-            user=self.user, name="Bank", account_type="bank", opening_balance=Decimal("200000.00")
+            user=self.user, name="Bank", account_type="bank", opening_balance=Decimal("200000.00"),
+            opening_balance_date=datetime.date(2024, 1, 1),
         )
         self.category = Category.objects.create(user=None, name="Rent", kind="expense")
         self.bill = RecurringBill.objects.create(

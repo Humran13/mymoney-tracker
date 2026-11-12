@@ -168,7 +168,10 @@ class ReopenAndBackfillTests(TestCase):
         from apps.closing.services import balance_as_of
 
         user = User.objects.create_user(email="edge5@example.com", password="StrongPass123!")
-        account = FinancialAccount.objects.create(user=user, name="Cash", account_type="cash", opening_balance=Decimal("100000.00"))
+        account = FinancialAccount.objects.create(
+            user=user, name="Cash", account_type="cash", opening_balance=Decimal("100000.00"),
+            opening_balance_date=datetime.date(2026, 1, 1),
+        )
         closed_day = datetime.date(2026, 1, 10)
         DailyClosing.objects.create(user=user, date=closed_day, is_closed=True)
 

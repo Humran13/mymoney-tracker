@@ -112,18 +112,6 @@ def health_warnings(user, report, goals, *, month_label=None, month_is_current=T
                 }
             )
 
-    if report.get("accounts_missing_opening_date"):
-        warnings.append(
-            {
-                "text": (
-                    f"{report['accounts_missing_opening_date']} account(s) have no opening-balance date, so "
-                    "historical entries can still change today's balance."
-                ),
-                "url": reverse("accounts:reconciliation"),
-                "link_text": "Review balances",
-            }
-        )
-
     return warnings
 
 
@@ -268,7 +256,6 @@ def compute_dashboard(user, month_param=None):
     report = compute_monthly_report(user, year, month)
     month_label = report["start"].strftime("%B %Y")
     month_is_current = (year, month) == (today.year, today.month)
-    report["accounts_missing_opening_date"] = sum(1 for account in accounts if account.opening_balance_date is None)
 
     goals = list(SavingsGoal.objects.filter(user=user, status=SavingsGoal.Status.ACTIVE))
     upcoming_bills = [b for b in RecurringBill.objects.filter(user=user, status=RecurringBill.Status.ACTIVE) if b.is_due_soon(7) or b.is_overdue()]

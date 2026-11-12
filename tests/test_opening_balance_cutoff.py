@@ -14,6 +14,7 @@ import datetime
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.accounts.models import FinancialAccount
 from apps.accounts.services import account_balance, bulk_account_balances, create_transfer
@@ -129,11 +130,12 @@ class OpeningBalanceCutoffTests(TestCase):
         # Still before the cutoff after the edit -> still excluded.
         self.assertEqual(account_balance(self.wallet), Decimal("631200.00"))
 
-    def test_transfer_respects_each_accounts_own_cutoff(self):
-        # Bank has no cutoff set (legacy/no-snapshot account) — it should
-        # keep including every posting, same as before this fix.
+    def test_transfer_respects_each_accounts_own_start_date(self):
+        # The bank declares a much earlier starting date than the wallet, so the
+        # same transfer counts for one account and not the other.
         bank = FinancialAccount.objects.create(
             user=self.user, name="Bank", account_type="bank", opening_balance=Decimal("0.00"),
+            opening_balance_date=datetime.date(2026, 1, 1),
         )
         create_transfer(
             user=self.user, from_account=self.wallet, to_account=bank,
@@ -154,7 +156,9 @@ class OpeningBalanceCutoffTests(TestCase):
         self.assertEqual(account_balance(self.wallet), Decimal("616200.00"))
         self.assertEqual(account_balance(bank), Decimal("35000.00"))
 
-    def test_bulk_account_balances_handles_mixed_cutoff_and_no_cutoff_accounts(self):
+    def test_bulk_account_balances_handles_declared_and_derived_starts(self):
+        # Bank declares no date, so its boundary is derived from when it was
+        # added — a posting dated today counts, one dated before does not.
         bank = FinancialAccount.objects.create(
             user=self.user, name="Bank", account_type="bank", opening_balance=Decimal("500000.00"),
         )
@@ -165,16 +169,21 @@ class OpeningBalanceCutoffTests(TestCase):
         create_transaction(
             user=self.user, account=bank, kind="income", category=None,
             amount=Decimal("10000.00"), fee_amount=Decimal("0.00"),
-            date=datetime.date(2026, 1, 1), description="Old income, no cutoff on this account",
+            date=datetime.date(2000, 1, 1), description="Ancient income, before this account existed here",
+        )
+        create_transaction(
+            user=self.user, account=bank, kind="income", category=None,
+            amount=Decimal("25000.00"), fee_amount=Decimal("0.00"),
+            date=timezone.localdate(), description="Income today",
         )
         balances = bulk_account_balances(self.user, [self.wallet, bank])
         self.assertEqual(balances[self.wallet.id], Decimal("631200.00"))
-        self.assertEqual(balances[bank.id], Decimal("510000.00"))
+        self.assertEqual(balances[bank.id], Decimal("525000.00"))
 
-    def test_no_cutoff_account_keeps_legacy_include_everything_behavior(self):
-        # opening_balance_date=None (the migration default for every
-        # pre-existing account) must reproduce the exact old behavior:
-        # every posting ever recorded affects the balance, regardless of date.
+    def test_account_without_declared_date_never_counts_pre_creation_postings(self):
+        # The permanent fix: a starting balance typed today is respected even
+        # when the account has no explicit cut-off date. This used to include
+        # every posting ever recorded (the reported bug).
         legacy = FinancialAccount.objects.create(
             user=self.user, name="Legacy Savings", account_type="savings", opening_balance=Decimal("1000.00"),
         )
@@ -182,5 +191,12 @@ class OpeningBalanceCutoffTests(TestCase):
             user=self.user, account=legacy, kind="income", category=None,
             amount=Decimal("500.00"), fee_amount=Decimal("0.00"),
             date=datetime.date(2000, 1, 1), description="Ancient income",
+        )
+        self.assertEqual(account_balance(legacy), Decimal("1000.00"))
+
+        create_transaction(
+            user=self.user, account=legacy, kind="income", category=None,
+            amount=Decimal("500.00"), fee_amount=Decimal("0.00"),
+            date=timezone.localdate(), description="Income recorded today",
         )
         self.assertEqual(account_balance(legacy), Decimal("1500.00"))

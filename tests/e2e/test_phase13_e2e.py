@@ -122,7 +122,7 @@ def test_reconciliation_page_is_reachable_and_read_only(signed_in_page, live_ser
     page.click("text=Review balances")
     page.wait_for_load_state("networkidle")
     assert "/accounts/reconciliation/" in page.url
-    assert "Opening balance reconciliation" in page.inner_text("h1")
+    assert "Your starting balances" in page.inner_text("h1")
     # Nothing is applied without an explicit confirm step.
     account.refresh_from_db()
     assert account.opening_balance_date is None

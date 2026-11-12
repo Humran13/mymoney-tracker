@@ -65,21 +65,18 @@ class Borrowing(UserOwnedModel):
 
     def receipt_affects_current_balance(self) -> bool:
         """True only if this loan's cash receipt is inside the receiving
-        account's opening-balance window.
+        account's starting window.
 
-        A cash loan dated before the account's snapshot date is already part
-        of the opening balance — the money may well have been spent long ago.
-        Such a loan must still increase what's owed, but must never increase
-        the account balance a second time. Accounts with no snapshot date
-        (`opening_balance_date IS NULL`, i.e. every pre-Phase-11 account) keep
-        the legacy include-everything behavior, which is exactly why those
-        accounts need the reconciliation review in
-        `apps.accounts.reconciliation`.
+        A cash loan dated before the account's starting date is already part of
+        the opening balance — the money may well have been spent long ago. Such
+        a loan must still increase what's owed, but must never increase the
+        account balance a second time. The starting date is declared or derived
+        (see `apps.accounts.models.balance_start_date`), so this is correct even
+        for accounts that never had an explicit `opening_balance_date`.
         """
         if self.debt_type != Borrowing.DebtType.CASH_LOAN or not self.receiving_account_id:
             return False
-        cutoff = self.receiving_account.opening_balance_date
-        return cutoff is None or self.date_borrowed >= cutoff
+        return self.date_borrowed >= self.receiving_account.balance_start_date
 
 
 class BorrowingRepayment(UserOwnedModel):

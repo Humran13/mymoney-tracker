@@ -21,6 +21,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db.models import Sum
+from django.utils import timezone
 
 from apps.accounts.models import AccountPosting, FinancialAccount, Transfer
 from apps.debts.models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
@@ -130,19 +131,23 @@ def _windowed_postings(user, start, end):
     """Postings in the window that are inside each account's opening-balance
     snapshot.
 
-    A posting dated before its account's `opening_balance_date` is already
-    reflected in that account's opening balance — it is a historical record of
-    something that happened before tracking started, not a movement of the
-    money currently being tracked. Including it here would make the report
-    contradict the balance it is supposed to explain (and would re-count a
-    historical loan the user only remembered and entered later).
+    A posting dated before its account's starting date is already reflected in
+    that account's opening balance — it is a historical record of something that
+    happened before tracking started, not a movement of the money currently
+    being tracked. Including it here would make the report contradict the
+    balance it is supposed to explain (and would re-count a historical loan the
+    user only remembered and entered later). The starting date is the account's
+    declared `opening_balance_date`, or — when none was declared — the day the
+    account was created (see `apps.accounts.models.balance_start_date`).
     """
     qs = AccountPosting.objects.filter(user=user, occurred_on__gte=start, occurred_on__lte=end)
-    cutoffs = FinancialAccount.objects.filter(user=user, opening_balance_date__isnull=False).values_list(
-        "id", "opening_balance_date"
-    )
-    for account_id, cutoff in cutoffs:
-        qs = qs.exclude(account_id=account_id, occurred_on__lt=cutoff)
+    cutoffs = FinancialAccount.objects.filter(user=user).values_list("id", "opening_balance_date", "created_at")
+    for account_id, declared, created in cutoffs:
+        start_date = declared
+        if start_date is None and created is not None:
+            start_date = timezone.localtime(created).date() if timezone.is_aware(created) else created.date()
+        if start_date is not None:
+            qs = qs.exclude(account_id=account_id, occurred_on__lt=start_date)
     return qs
 
 

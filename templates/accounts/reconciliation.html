@@ -3,17 +3,17 @@
 {% block title %}Balance reconciliation · {{ APP_NAME }}{% endblock %}
 {% block content %}
 {% include "base/_back_link.html" with back_url_name="accounts:list" %}
-<h1 class="text-xl font-semibold mb-1">Opening balance reconciliation</h1>
+<h1 class="text-xl font-semibold mb-1">Your starting balances</h1>
 <p class="text-sm text-slate-500 mb-4">
-  A read-only review. Nothing here changes your money — the only action available is setting an account's
-  opening-balance <span class="font-medium">date</span>, and only after you confirm it.
+  Where each account's balance begins. Nothing here needs fixing — the app already handles this
+  automatically. This page simply shows its working.
 </p>
 
 <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-xs text-slate-600 dark:text-slate-300 mb-6">
-  <p class="font-medium mb-1">How an opening balance works here</p>
-  <p>Your opening balance is the money actually in the account at the <span class="font-medium">start</span> of the
-  snapshot date. Everything dated on or after that date is added on top; anything dated before it is kept as
-  historical record but does not change today's balance — it is already inside the opening balance.</p>
+  <p class="font-medium mb-1">How your balance is worked out</p>
+  <p>Your balance = the starting balance you entered + everything recorded from your starting date onwards.
+  Entries dated before that are kept, but not added again — they were already reflected in the balance you
+  entered. That is why recording an old loan never increases the money you have today.</p>
 </div>
 
 {% if pending %}
@@ -38,10 +38,10 @@
 
 <div class="grid sm:grid-cols-3 gap-4 mb-6">
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-    <p class="text-xs text-slate-500">Accounts needing review</p><p class="text-xl font-bold">{{ needs_review_count }}</p>
+    <p class="text-xs text-slate-500">Accounts with earlier history kept aside</p><p class="text-xl font-bold">{{ with_history_count }}</p>
   </div>
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-    <p class="text-xs text-slate-500">Accounts with a snapshot date</p><p class="text-xl font-bold">{{ ok_count }}</p>
+    <p class="text-xs text-slate-500">Starting dates you set</p><p class="text-xl font-bold">{{ declared_count }}</p>
   </div>
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
     <p class="text-xs text-slate-500">Historical cash loans still owed</p><p class="text-xl font-bold">{{ historical_cash_loan_total|money }}</p>
@@ -51,40 +51,39 @@
 
 <div class="space-y-6">
   {% for row in accounts %}
-  <div class="bg-white dark:bg-slate-800 border {% if row.needs_review %}border-amber-300{% else %}border-slate-200 dark:border-slate-700{% endif %} rounded-xl p-5">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
     <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
       <div class="min-w-0">
         <h2 class="font-semibold">{{ row.account.name }}</h2>
-        <p class="text-xs text-slate-500">{{ row.account.get_account_type_display }} · created {{ row.created_date }}</p>
+        <p class="text-xs text-slate-500">{{ row.account.get_account_type_display }} · added {{ row.created_date }}</p>
       </div>
-      {% if row.needs_review %}
-      <span class="text-xs bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">No snapshot date</span>
+      {% if row.start_is_declared %}
+      <span class="text-xs bg-green-100 text-green-800 rounded-full px-2 py-0.5">Starting date set by you: {{ row.start_date }}</span>
       {% else %}
-      <span class="text-xs bg-green-100 text-green-800 rounded-full px-2 py-0.5">Snapshot {{ row.opening_balance_date }}</span>
+      <span class="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5">Starting date: {{ row.start_date }}</span>
       {% endif %}
     </div>
 
-    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-3">
-      <div><p class="text-xs text-slate-500">Opening balance</p><p class="font-medium">{{ row.opening_balance|money }}</p></div>
-      <div><p class="text-xs text-slate-500">Opening date</p><p class="font-medium">{{ row.opening_balance_date|default:"—" }}</p></div>
-      <div><p class="text-xs text-slate-500">Current calculated balance</p><p class="font-medium">{{ row.current_balance|money }}</p></div>
-      <div><p class="text-xs text-slate-500">Proposed balance</p><p class="font-medium">{{ row.proposed_balance|money }}</p></div>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm mb-3">
+      <div><p class="text-xs text-slate-500">Starting balance you entered</p><p class="font-medium">{{ row.opening_balance|money }}</p></div>
+      <div><p class="text-xs text-slate-500">Starting date</p><p class="font-medium">{{ row.start_date }}</p></div>
+      <div><p class="text-xs text-slate-500">Your balance now</p><p class="font-medium">{{ row.current_balance|money }}</p></div>
     </div>
 
     <div class="grid sm:grid-cols-2 gap-3 text-sm mb-3">
       <div class="bg-slate-50 dark:bg-slate-700/30 rounded-lg p-3">
-        <p class="text-xs text-slate-500 mb-1">Postings before the reference date</p>
-        <p>{{ row.before_cutoff_count }} posting(s), net {{ row.before_cutoff_sum|money }}</p>
+        <p class="text-xs text-slate-500 mb-1">Earlier entries (kept, not added)</p>
+        <p>{{ row.before_cutoff_count }} entry(s), {{ row.before_cutoff_sum|money }}</p>
       </div>
       <div class="bg-slate-50 dark:bg-slate-700/30 rounded-lg p-3">
-        <p class="text-xs text-slate-500 mb-1">Postings inside the tracked window</p>
-        <p>{{ row.after_cutoff_count }} posting(s), net {{ row.after_cutoff_sum|money }}</p>
+        <p class="text-xs text-slate-500 mb-1">Entries that count towards the balance</p>
+        <p>{{ row.after_cutoff_count }} entry(s), {{ row.after_cutoff_sum|money }}</p>
       </div>
     </div>
 
     {% if row.historical_cash_loans %}
     <div class="mb-3">
-      <p class="text-xs text-slate-500 mb-1">Historical cash loans on this account</p>
+      <p class="text-xs text-slate-500 mb-1">Loans received before the starting date (owed, but not extra cash)</p>
       {% for loan in row.historical_cash_loans %}
       <div class="flex flex-wrap justify-between gap-2 text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
         <span class="min-w-0 break-words">{{ loan.lender_name }} · borrowed {{ loan.date_borrowed }}{% if loan.due_date %} · due {{ loan.due_date }}{% endif %}</span>
@@ -96,7 +95,7 @@
 
     {% if row.historical_repayments %}
     <div class="mb-3">
-      <p class="text-xs text-slate-500 mb-1">Historical repayments from this account</p>
+      <p class="text-xs text-slate-500 mb-1">Repayments made before the starting date</p>
       {% for repayment in row.historical_repayments %}
       <div class="flex flex-wrap justify-between gap-2 text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
         <span class="min-w-0 break-words">{{ repayment.date }} · {{ repayment.borrowing.lender_name }}</span>
@@ -106,35 +105,28 @@
     </div>
     {% endif %}
 
-    {% if row.candidates %}
-    <div class="mb-3">
-      <p class="text-xs text-slate-500 mb-1">If you set a snapshot date (for your review only)</p>
-      {% for candidate in row.candidates %}
-      <div class="flex flex-wrap justify-between gap-2 text-sm py-1">
-        <span>{{ candidate.date }}</span>
-        <span class="whitespace-nowrap">balance {{ candidate.balance|money }} ({% if candidate.difference > 0 %}+{% endif %}{{ candidate.difference|money }})</span>
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-
+    {% for note in row.notes %}
+    <p class="text-xs text-slate-500 mb-2">{{ note }}</p>
+    {% endfor %}
     {% for note in row.ambiguity %}
     <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">{{ note }}</p>
     {% endfor %}
-    <p class="text-xs text-slate-500 mb-3">{{ row.explanation }}</p>
 
     <details class="text-sm">
-      <summary class="cursor-pointer text-brand-700 dark:text-brand-400">Set or clear this account's snapshot date</summary>
+      <summary class="cursor-pointer text-brand-700 dark:text-brand-400">Use a different starting date (optional)</summary>
       <form method="post" action="{% url 'accounts:opening_snapshot' row.account.pk %}" class="mt-3 flex flex-wrap items-end gap-3">
         {% csrf_token %}
         <div>
-          <label for="snapshot-{{ row.account.pk }}" class="block text-xs text-slate-500 mb-1">Snapshot date</label>
+          <label for="snapshot-{{ row.account.pk }}" class="block text-xs text-slate-500 mb-1">Starting date</label>
           <input type="date" name="opening_balance_date" id="snapshot-{{ row.account.pk }}"
                  value="{{ row.opening_balance_date|date:'Y-m-d' }}" class="!w-auto text-sm py-1">
         </div>
-        <button type="submit" class="px-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Preview change</button>
+        <button type="submit" class="px-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Preview</button>
       </form>
-      <p class="text-xs text-slate-500 mt-2">You will see the exact before/after balance and must confirm again before anything is saved.</p>
+      <p class="text-xs text-slate-500 mt-2">
+        Only change this if you know your starting balance describes a different day. You will see the exact
+        before/after balance and must confirm again; leave it blank to go back to the automatic date.
+      </p>
     </details>
   </div>
   {% empty %}

@@ -131,5 +131,5 @@ def test_reconciliation_page_has_no_overflow_on_mobile(signed_in_page, live_serv
     page.set_viewport_size({"width": width, "height": 800})
     page.goto(f"{live_server.url}/accounts/reconciliation/")
     page.wait_for_load_state("networkidle")
-    assert "Opening balance reconciliation" in page.inner_text("h1")
+    assert "Your starting balances" in page.inner_text("h1")
     _assert_no_horizontal_overflow(page, width)

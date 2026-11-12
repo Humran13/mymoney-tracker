@@ -1,14 +1,49 @@
 # Phase 13 Handoff — Financial Accuracy &amp; Dashboard Improvements
 
-**Last updated:** 2026-11-12
+**Last updated:** 2026-11-12 (second pass — starting-balance boundary fix)
 **For:** whichever assistant (Claude Code, DeepSeek, or a human) picks this up next.
 Read this before touching money code — it records the accounting decisions, the
 one real bug that keeps recurring, and what is *implemented* vs *tested* vs
 *deployed* vs *applied to the owner's real data*.
 
+## 0. CRITICAL — starting-balance fix (read this first)
+
+The owner reported the balance inflation **a third time** and was right: the
+reconciliation screen left it as a manual step, so nothing actually changed for
+real accounts. It is now fixed **in the calculation itself** — no data migration,
+no user action, no forced correction procedure.
+
+**The rule, permanently:** an account's starting date is its declared
+`opening_balance_date`, or — when none was ever declared — **the local date the
+account row was created** (the day the user typed "here is the money I actually
+have"). Everything dated before that is already inside the starting balance and
+never changes it again.
+
+* Implemented once in `apps/accounts/models.balance_start_date()` and used by
+  every calculation: `account_balance`, `bulk_account_balances`,
+  `balance_as_of`, `_windowed_postings` (cash-flow page).
+* `created_at` is a recorded fact, not a guess, and it is explicitly **not** the
+  first-transaction date (that would silently swallow real history).
+* `opening_balance_date` stays as an **optional override** (audited, reversible)
+  for a user whose starting balance describes a different day.
+* No opening balance, posting, loan or repayment is rewritten, and no date is
+  invented. The only thing that changes is arithmetic — existing records are
+  untouched and immediately correct.
+* `tests/test_starting_balance_boundary.py` (28 tests) pins the rule, including
+  the reported scenario on an account with **no** `opening_balance_date` set.
+* The screen at `/accounts/reconciliation/` is now explanatory
+  ("Your starting balances") rather than a task list; the dashboard no longer
+  nags about missing dates.
+
+This supersedes: §2.4's "owner must set a date", §7 item 1, and the
+"Known limitations" bullet about legacy NULL dates.
+
 ---
 
-## 0. Repository state verified at the start of this phase
+
+---
+
+## 0b. Repository state verified at the start of this phase
 
 | Check | Result |
 |---|---|

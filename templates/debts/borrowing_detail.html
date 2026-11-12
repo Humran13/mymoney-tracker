@@ -17,9 +17,9 @@
 <p class="text-xs text-slate-500 mb-4">This is a noncash obligation — recording it did not increase your available cash. Only repayments reduce your cash.</p>
 {% elif not borrowing.receipt_affects_current_balance %}
 <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-xs text-slate-600 dark:text-slate-300 mb-4">
-  You borrowed this money on {{ borrowing.date_borrowed }}, before this account's opening-balance date
-  ({{ borrowing.receiving_account.opening_balance_date }}). That cash is already part of the opening balance, so this
-  record increases what you owe but <span class="font-medium">not</span> your current available balance. Repayments you
+  You borrowed this money on {{ borrowing.date_borrowed }}, before this account's starting date
+  ({{ borrowing.receiving_account.balance_start_date }}). That cash is already part of your starting balance, so this
+  record increases what you owe but <span class="font-medium">not</span> the money you have today. Repayments you
   make from now on do reduce the account balance.
 </div>
 {% endif %}

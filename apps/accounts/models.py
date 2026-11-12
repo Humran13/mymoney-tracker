@@ -1,10 +1,43 @@
+from datetime import date
+
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from apps.core.models import TimeStampedModel, UserOwnedModel, money_field
+
+
+def balance_start_date(account) -> date:
+    """The date an account's `opening_balance` became true — one definition,
+    used by every balance/cash-flow calculation in the app.
+
+    Two sources, in priority order:
+
+    1. `opening_balance_date` — the user declared it (or the form defaulted it
+       to the day they set the account up). Explicit always wins.
+    2. **Derived**: the local date the account row was created. This is the
+       moment the user typed "here is the money I actually have", so everything
+       dated before it is already reflected in that number. It is a recorded
+       fact, not a guess — and it is deliberately *not* the first transaction
+       date, which would silently swallow real history.
+
+    Without source 2, every pre-Phase-11 account (`opening_balance_date IS
+    NULL`) kept summing its entire history on top of the starting balance, which
+    is exactly how a loan borrowed months before the user joined inflated
+    today's cash. That is the bug this function exists to make impossible.
+    """
+    declared = getattr(account, "opening_balance_date", None)
+    if declared is not None:
+        return declared
+    created = getattr(account, "created_at", None)
+    if created is None:  # unsaved instance — no boundary can be derived yet
+        return date.min
+    if timezone.is_aware(created):
+        created = timezone.localtime(created)
+    return created.date()
 
 
 class FinancialAccount(UserOwnedModel):
@@ -48,6 +81,16 @@ class FinancialAccount(UserOwnedModel):
 
     def __str__(self):
         return f"{self.name} ({self.get_account_type_display()})"
+
+    @property
+    def balance_start_date(self):
+        """Where this account's starting balance begins (see module helper)."""
+        return balance_start_date(self)
+
+    @property
+    def balance_start_is_declared(self):
+        """True when the start date was set explicitly rather than derived."""
+        return self.opening_balance_date is not None
 
 
 class AccountPosting(TimeStampedModel):

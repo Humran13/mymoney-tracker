@@ -7,6 +7,13 @@ See `PHASE13_HANDOFF.md` for the full record.
 
 ## Phase 13 — financial accuracy (2026-11-12)
 
+**Starting-balance boundary fixed in the calculation itself.** An account's
+starting date is its declared `opening_balance_date`, or — when none was ever
+declared — the day the account was added. Entries dated before it are already
+inside the starting balance, so recording an old debt can no longer inflate
+today's cash. This needs no data migration and no user action, and existing
+records are untouched. See `PHASE13_HANDOFF.md` §0.
+
 - New **Income vs Expenses Analysis** page (`/reports/income-vs-expenses/`):
   defaults to today, 7/30/60-day and custom ranges, per-day breakdown, weekly
   comparison, per-day drill-down. Cash movement and accrual income/expenses are
@@ -31,8 +38,9 @@ See `PHASE13_HANDOFF.md` for the full record.
   must take explicitly.
 - Internal transfers no longer inflate the dashboard's / Daily Closing's
   "received" and "spent" figures (only the transfer fee counts).
-- **Tests:** 243 unit/integration (was 136) and 318 across the whole tree in CI
-  order (Chromium); the new Phase 13 E2E suite also passes on Firefox and WebKit.
+- **Tests:** 272 unit/integration (was 136 at the start of Phase 13) and 347
+  across the whole tree in CI order (Chromium); the Phase 13 E2E suite also
+  passes on Firefox and WebKit. `ruff` clean, `manage.py check` clean.
 - `ruff` clean, `manage.py check` clean.
 - **GitHub:** pushed to `origin/master` (head `4bbeb41`); CI run `43233071723`
   green on all 5 jobs, with 318 tests passing against real PostgreSQL.

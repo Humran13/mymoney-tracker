@@ -1,3 +1,4 @@
+import datetime
 from decimal import Decimal
 
 from apps.accounts.models import FinancialAccount
@@ -58,9 +59,16 @@ def test_mobile_money_fee_deducts_principal_plus_fee(signed_in_page, live_server
 
 def test_transfer_between_accounts_preserves_total_minus_fee(signed_in_page, live_server, db):
     page, user, account = signed_in_page
+    first_of_year = datetime.date(2026, 1, 1)
     second = FinancialAccount.objects.create(
-        user=user, name="Savings", account_type="savings", opening_balance=Decimal("0.00")
+        user=user, name="Savings", account_type="savings", opening_balance=Decimal("0.00"),
+        opening_balance_date=first_of_year,
     )
+    # The transfer is dated in the past, so it only affects balances if the
+    # account's starting date is at or before it (entries before that are
+    # already inside the starting balance).
+    account.opening_balance_date = first_of_year
+    account.save(update_fields=["opening_balance_date"])
 
     page.goto(f"{live_server.url}/accounts/transfers/new/")
     page.select_option("#id_from_account", str(account.pk))

@@ -1,26 +1,25 @@
-"""Read-only opening-balance reconciliation (Phase 13, improvement 7).
+"""Starting-balance transparency screen.
 
-The recurring bug this addresses: an account was created with the owner's real
-available cash as its `opening_balance`, and an old cash loan was recorded
-later with its true (much earlier) borrowing date. For an account with no
-`opening_balance_date`, every posting ever recorded is summed into the balance,
-so that historical loan inflates today's cash a second time.
+An account's balance is `opening_balance + postings on/after its starting
+date`. The starting date is the user's explicitly declared
+`opening_balance_date`, or — automatically — the day the account was added
+(see `apps/accounts.models.balance_start_date`). Nothing here is required to
+make balances correct: the calculation is already automatic.
 
-Nothing in this module touches money on its own:
+Nothing in this module touches money:
 
 * `account_reconciliation()` / `reconciliation_preview()` are strictly
-  read-only and exist so the owner can see exactly what is recorded, what the
-  current balance is, and what applying a snapshot date *would* do.
+  read-only. They show where the starting point came from, what falls before
+  it, and what changing it *would* do.
 * `apply_opening_snapshot_date()` changes exactly one nullable metadata column
-  (`opening_balance_date`) and writes an audit event. It never edits an
-  opening balance, a posting, a loan or a repayment — a naive automatic
-  correction could subtract the same historical loan twice on accounts whose
-  balance was already hand-adjusted.
+  (`opening_balance_date`) and writes an audit event. It never edits an opening
+  balance, a posting, a loan or a repayment — a naive automatic correction could
+  subtract the same historical loan twice on accounts whose balance was already
+  hand-adjusted.
 
-Snapshot semantics (one definition, used everywhere): `opening_balance` is the
-money available at the **start** of `opening_balance_date`. Postings dated on
-or after that date are added on top; postings dated before it are historical
-record only. That is what makes same-day transactions count exactly once.
+Semantics (one definition, used by every calculation): `opening_balance` is the
+money available at the **start** of the starting date. Postings dated on or
+after it are added on top; postings dated before it are history only.
 """
 
 from decimal import Decimal
@@ -30,9 +29,10 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from apps.core.audit import log_audit_event
+from apps.core.models import AuditEvent
 from apps.debts.models import Borrowing, BorrowingRepayment
 
-from .models import FinancialAccount
+from .models import FinancialAccount, balance_start_date
 
 ZERO = Decimal("0.00")
 
@@ -42,90 +42,99 @@ def _posting_sum(postings) -> Decimal:
 
 
 def snapshot_balance(account: FinancialAccount, cutoff) -> Decimal:
-    """What this account's balance *would* be with `cutoff` as its snapshot
+    """What this account's balance *would* be with `cutoff` as its starting
     date. Pure calculation — identical logic to `services.account_balance`,
-    parameterised so we can preview a date the account doesn't have yet."""
+    parameterised so the screen can preview a date the account doesn't have yet.
+    """
     postings = account.postings.all()
     if cutoff is not None:
         postings = postings.filter(occurred_on__gte=cutoff)
     return account.opening_balance + _posting_sum(postings)
 
 
-def _created_date(account: FinancialAccount):
-    return timezone.localtime(account.created_at).date()
 
+def _created_date(account: FinancialAccount):
+    created = account.created_at
+    if created is None:
+        return None
+    return timezone.localtime(created).date() if timezone.is_aware(created) else created.date()
 
 
 def account_reconciliation(account: FinancialAccount) -> dict:
-    """Full, read-only picture of one account for the review screen."""
-    cutoff = account.opening_balance_date
+    """Full, read-only picture of one account's starting point."""
+    start = balance_start_date(account)
+    declared = account.opening_balance_date
     all_postings = account.postings.all()
-    if cutoff is not None:
-        before = all_postings.filter(occurred_on__lt=cutoff)
-        after = all_postings.filter(occurred_on__gte=cutoff)
-    else:
-        before = all_postings
-        after = all_postings.none()
+    before = all_postings.filter(occurred_on__lt=start)
+    after = all_postings.filter(occurred_on__gte=start)
 
-    current_balance = snapshot_balance(account, cutoff)
+    current_balance = snapshot_balance(account, start)
     created = _created_date(account)
-    # Without a snapshot date, the app has no idea when the opening balance was
-    # true; the account's own creation date is the only evidenced reference
-    # point, so that is what the preview compares against (it is shown as a
-    # question, never applied silently).
-    reference_date = cutoff if cutoff is not None else created
 
     historical_cash_loans = list(
         Borrowing.objects.filter(
             user=account.user,
             receiving_account=account,
             debt_type=Borrowing.DebtType.CASH_LOAN,
-            date_borrowed__lt=reference_date,
+            date_borrowed__lt=start,
         )
     )
     historical_repayments = list(
-        BorrowingRepayment.objects.filter(user=account.user, paying_account=account, date__lt=reference_date)
+        BorrowingRepayment.objects.filter(user=account.user, paying_account=account, date__lt=start)
     )
 
-    candidates = []
-    if cutoff is None:
-        seen = set()
-        earliest_posting = all_postings.order_by("occurred_on").values_list("occurred_on", flat=True).first()
-        for candidate in (created, earliest_posting):
-            if candidate is None or candidate in seen:
-                continue
-            seen.add(candidate)
-            projected = snapshot_balance(account, candidate)
-            candidates.append({"date": candidate, "balance": projected, "difference": projected - current_balance})
+    notes = []
+    if declared is not None:
+        notes.append(
+            f"Your starting date is {start} (the date you set). Entries dated before it "
+            f"({before.count()}) are kept as history and are not added to your balance."
+        )
+    else:
+        notes.append(
+            f"Your starting date is {start} — the day this account was added and this balance was entered. "
+            f"Entries dated before it ({before.count()}) are kept as history and are not added to your balance."
+        )
+    if before.exists():
+        notes.append(
+            "That is deliberate: your starting balance already reflects everything that had happened by then, "
+            "so adding those entries again would show money you do not actually have."
+        )
 
     ambiguity = []
-    if cutoff is None:
-        if before.exists():
-            ambiguity.append(
-                f"This account has no snapshot date, so all {before.count()} of its postings are added to the "
-                "opening balance — including entries dated before the account existed here. If your opening "
-                "balance already reflected them, they are currently counted twice."
-            )
-        else:
-            ambiguity.append(
-                "This account has no snapshot date. Nothing predates its creation, so its balance is almost "
-                "certainly right today — but a later entry with a backdated date would still distort it."
-            )
-        if historical_cash_loans:
-            ambiguity.append(
-                "A historical cash loan dated before this account's creation date is currently adding to its "
-                "balance. If that money was already spent before you started tracking, the balance is overstated."
-            )
-    else:
+    if before.exists() and account.opening_balance == 0:
         ambiguity.append(
-            f"Snapshot date is set to {cutoff}: postings dated before it ({before.count()}) are excluded from the "
-            "balance, and the opening balance is taken as true at the start of that day."
+            "Your starting balance is 0 and some entries are dated earlier, so they are not counted. If that "
+            "history should count towards this account, set a starting date before "
+            f"{start} — nothing is changed unless you do."
+        )
+    edits = (
+        AuditEvent.objects.filter(
+            object_type="FinancialAccount", object_id=str(account.pk), action="update"
+        )
+        .order_by("-created_at")
+        .values_list("created_at", flat=True)[:3]
+    )
+    edit_dates = sorted({timezone.localtime(dt).date() for dt in edits}, reverse=True)
+    if edit_dates:
+        ambiguity.append(
+            "This account has been edited since it was created ("
+            + ", ".join(str(d) for d in edit_dates)
+            + "). If its starting balance was adjusted to offset an earlier miscalculation, please check "
+            "the figure below — no automatic correction has been made."
+        )
+    if historical_cash_loans:
+        ambiguity.append(
+            "A loan recorded here was actually received before this account's starting date. That loan still "
+            "increases what you owe, but it does not increase this account's balance — the money was already "
+            "spent before you started tracking."
         )
 
     return {
         "account": account,
         "opening_balance": account.opening_balance,
-        "opening_balance_date": cutoff,
+        "opening_balance_date": declared,
+        "start_date": start,
+        "start_is_declared": declared is not None,
         "created_date": created,
         "current_balance": current_balance,
         "before_cutoff_count": before.count(),
@@ -134,18 +143,17 @@ def account_reconciliation(account: FinancialAccount) -> dict:
         "after_cutoff_sum": _posting_sum(after),
         "historical_cash_loans": historical_cash_loans,
         "historical_repayments": historical_repayments,
-        "candidates": candidates,
-        "needs_review": cutoff is None,
+        # Kept for the template's badge/tone only; no action is required.
+        "has_history_before_start": before.exists(),
         # Deliberately equal to the current balance: this screen proposes no
-        # automatic money change. Only the owner can decide a snapshot date.
+        # automatic money change.
         "proposed_balance": current_balance,
         "proposed_difference": ZERO,
         "explanation": (
-            "No correction is proposed automatically. Set a snapshot date only if you are sure the opening "
-            "balance you entered reflects everything dated before it."
-            if cutoff is None
-            else "This account already has a snapshot date, so historical entries are not double-counted."
+            "Nothing needs correcting here. Change the starting date only if you know this balance describes "
+            "a different day."
         ),
+        "notes": notes,
         "ambiguity": ambiguity,
     }
 
@@ -153,11 +161,13 @@ def account_reconciliation(account: FinancialAccount) -> dict:
 def reconciliation_preview(user) -> dict:
     accounts = list(FinancialAccount.objects.filter(user=user).order_by("status", "name"))
     rows = [account_reconciliation(account) for account in accounts]
+    with_history = [row for row in rows if row["has_history_before_start"]]
     return {
         "accounts": rows,
-        "needs_review": [row for row in rows if row["needs_review"]],
-        "needs_review_count": sum(1 for row in rows if row["needs_review"]),
-        "ok_count": sum(1 for row in rows if not row["needs_review"]),
+        "with_history_count": len(with_history),
+        "with_history": with_history,
+        "declared_count": sum(1 for row in rows if row["start_is_declared"]),
+        "derived_count": sum(1 for row in rows if not row["start_is_declared"]),
         "historical_cash_loan_total": sum(
             (loan.outstanding() for row in rows for loan in row["historical_cash_loans"]), ZERO
         ),
@@ -166,13 +176,16 @@ def reconciliation_preview(user) -> dict:
 
 @db_transaction.atomic
 def apply_opening_snapshot_date(*, account: FinancialAccount, new_date, actor=None) -> dict:
-    """Apply the owner's explicitly chosen snapshot date.
+    """Apply an explicitly chosen starting date (an override, not a correction).
 
-    Transactional, audited and reversible: passing `new_date=None` restores the
-    previous "no cutoff" behavior. Nothing except the snapshot date is written.
+    Transactional, audited and reversible: passing `new_date=None` falls back to
+    the automatic date. Nothing except that one column is written.
     """
     previous_date = account.opening_balance_date
-    before = snapshot_balance(account, previous_date)
+    # "Before" must be the balance the user actually sees, which for an account
+    # with no declared date is computed from its automatic start — not from
+    # "no cutoff at all" (that old value is what this screen used to overstate).
+    before = snapshot_balance(account, balance_start_date(account))
     account.opening_balance_date = new_date
     account.save(update_fields=["opening_balance_date"])
     after = snapshot_balance(account, new_date)
