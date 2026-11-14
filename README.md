@@ -239,6 +239,66 @@ and `tests/e2e/test_auth_e2e.py`'s password-reset tests) — real SMTP
 delivery has not been verified against an actual provider, since no
 credentials were available in this environment.
 
+## Google sign-in (optional)
+
+Google OAuth is implemented with `django-allauth`. It is fail-closed: the
+button and Google endpoints stay disabled until both credentials below are
+configured. Existing email/password login remains the primary local login and
+continues to be protected by `django-axes`.
+
+### Google Cloud Console setup
+
+1. In Google Cloud Console, create or select a project and configure the OAuth
+   consent screen. Add the application name, support email, and the production
+   domain. If the consent screen is in testing mode, add the intended Google
+   accounts as test users.
+2. Under **APIs & Services → Credentials**, create an **OAuth client ID** with
+   application type **Web application**.
+3. Add this authorized JavaScript origin:
+
+   ```text
+   https://money.therealworldboosts.com
+   ```
+
+4. Add this exact authorized redirect URI (including the trailing slash):
+
+   ```text
+   https://money.therealworldboosts.com/oauth/google/login/callback/
+   ```
+
+5. Put the generated values only in the server's untracked `.env` file:
+
+   ```dotenv
+   GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+   ```
+
+   Do not also create a Google `SocialApp` in Django admin; this project loads
+   the same client credentials from the environment, and configuring both
+   sources would make the provider ambiguous.
+
+6. Rebuild/restart the web container and run the normal migrations. The
+   container entrypoint already runs `python manage.py migrate`; this creates
+   django-allauth's account-link tables without changing any financial data.
+
+Account safety rules are intentional:
+
+- An anonymous Google login never attaches itself to an existing user merely
+  because the emails match. The user must first sign in with their existing
+  password and choose **Settings → Connect Google**.
+- Connecting or disconnecting Google requires password reauthentication and
+  OAuth state/CSRF validation.
+- New Google users are created only while the existing database-backed public
+  registration switch is enabled, and they enter the normal onboarding flow.
+- Google access and refresh tokens are not stored. The client secret is never
+  sent to frontend code or committed to Git.
+- Suspended or administrator-disabled users are rejected. A user's own
+  deactivated account follows the existing successful-login reactivation rule.
+
+For local OAuth testing, create a separate Google Web client and register
+`http://127.0.0.1:8000/oauth/google/login/callback/`; never reuse production
+secrets in a developer `.env` file shared with anyone else.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push/PR: lint (`ruff`), a Python

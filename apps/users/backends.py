@@ -1,4 +1,5 @@
 from django.contrib.auth.backends import ModelBackend
+from allauth.account.auth_backends import AuthenticationBackend
 
 
 class EmailModelBackend(ModelBackend):
@@ -9,3 +10,16 @@ class EmailModelBackend(ModelBackend):
 
     def user_can_authenticate(self, user):
         return super().user_can_authenticate(user) and not getattr(user, "is_suspended", False)
+
+
+class SocialAccountBackend(AuthenticationBackend):
+    """Backend marker used by django-allauth when it creates a session.
+
+    Password authentication deliberately remains disabled here. The existing
+    EmailModelBackend (wrapped by django-axes) stays the only password-login
+    path, so installing allauth cannot introduce a rate-limit bypass or an
+    alternate email alias through allauth's EmailAddress table.
+    """
+
+    def authenticate(self, request, **credentials):
+        return None

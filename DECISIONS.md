@@ -86,6 +86,12 @@ Newest at top isn't required here — this is organized by topic instead.
 - **Public registration is a DB-backed toggle** (`SiteConfiguration`
   singleton in `apps/adminpanel`), not just an env var, so an administrator
   can close registration without a redeploy.
+- **Google identities are linked by provider UID, never email equality.** A
+  Google account whose email already belongs to a local user is stopped and
+  told to password-login first, then explicitly connect Google from Settings.
+  Connection changes require reauthentication. The allauth password-login
+  endpoints are not exposed, so the existing `django-axes`-protected password
+  path remains the only one.
 
 ## Admin panel
 

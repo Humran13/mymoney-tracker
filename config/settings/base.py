@@ -30,6 +30,10 @@ INSTALLED_APPS = [
     "django_filters",
     "django_htmx",
     "axes",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
     # local apps
     "apps.core",
     "apps.users",
@@ -55,6 +59,8 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
+    "apps.users.middleware.OAuthEndpointGuardMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
     "axes.middleware.AxesMiddleware",
@@ -92,6 +98,7 @@ AUTH_USER_MODEL = "users.User"
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesBackend",
     "apps.users.backends.EmailModelBackend",
+    "apps.users.backends.SocialAccountBackend",
 ]
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -120,6 +127,44 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "users:login"
 LOGIN_REDIRECT_URL = "dashboard:home"
 LOGOUT_REDIRECT_URL = "users:login"
+
+# -------- Google OAuth (django-allauth) --------
+# OAuth is intentionally unavailable unless both values are configured. The
+# endpoint guard middleware returns 404 for Google routes while disabled, and
+# the templates do not render Google controls. The secret is used server-side
+# only and must never be embedded in a template or frontend bundle.
+GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", default="")
+GOOGLE_OAUTH_CLIENT_SECRET = env("GOOGLE_OAUTH_CLIENT_SECRET", default="")
+GOOGLE_OAUTH_ENABLED = bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET)
+
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_LOGIN_METHODS = {"email"}
+ACCOUNT_SIGNUP_FIELDS = ["email*"]
+ACCOUNT_EMAIL_VERIFICATION = "none"
+ACCOUNT_ADAPTER = "apps.users.adapters.MyMoneyAccountAdapter"
+ACCOUNT_SIGNUP_REDIRECT_URL = "accounts:onboarding"
+
+SOCIALACCOUNT_ADAPTER = "apps.users.adapters.MyMoneySocialAccountAdapter"
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_EMAIL_REQUIRED = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = False
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = False
+SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
+SOCIALACCOUNT_LOGIN_ON_GET = False
+SOCIALACCOUNT_REAUTHENTICATION_REQUIRED = True
+SOCIALACCOUNT_STORE_TOKENS = False
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APP": {
+            "client_id": GOOGLE_OAUTH_CLIENT_ID,
+            "secret": GOOGLE_OAUTH_CLIENT_SECRET,
+            "key": "",
+        },
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {"access_type": "online", "prompt": "select_account"},
+        "OAUTH_PKCE_ENABLED": True,
+    }
+}
 
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 14  # 14 days
 SESSION_SAVE_EVERY_REQUEST = True

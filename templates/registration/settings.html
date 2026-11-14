@@ -13,4 +13,32 @@
     <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save settings</button>
   </form>
 </div>
+
+<div class="mt-6 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <h2 class="font-semibold">Sign-in methods</h2>
+  <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">Connect Google only from this signed-in account. A matching email address alone will never link accounts.</p>
+  {% if google_account %}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950 p-4">
+      <div class="flex items-center gap-3 min-w-0">
+        {% include "registration/_google_logo.html" %}
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-emerald-900 dark:text-emerald-100">Google connected</p>
+          <p class="text-xs text-emerald-700 dark:text-emerald-300 truncate">{{ google_account.extra_data.email|default:"Connected Google account" }}</p>
+        </div>
+      </div>
+      <a href="{% url 'socialaccount_connections' %}" class="text-sm font-medium text-brand-700 dark:text-brand-400">Manage</a>
+    </div>
+  {% elif GOOGLE_OAUTH_ENABLED %}
+    {% load socialaccount %}
+    <form method="post" action="{% provider_login_url 'google' process='connect' %}">
+      {% csrf_token %}
+      <button type="submit" class="w-full sm:w-auto min-h-11 inline-flex items-center justify-center gap-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700">
+        {% include "registration/_google_logo.html" %}
+        <span>Connect Google</span>
+      </button>
+    </form>
+  {% else %}
+    <p class="text-sm text-slate-500 dark:text-slate-400">Google sign-in is not configured on this server.</p>
+  {% endif %}
+</div>
 {% endblock %}

@@ -24,15 +24,11 @@ from .forms import (
     UserBasicForm,
     UserSettingsForm,
 )
+from .policy import public_registration_is_open
 
 
 def _registration_open():
-    try:
-        from apps.adminpanel.models import SiteConfiguration
-
-        return SiteConfiguration.get_solo().allow_public_registration
-    except Exception:
-        return settings.ALLOW_PUBLIC_REGISTRATION
+    return public_registration_is_open()
 
 
 class RegisterView(FormView):
@@ -107,6 +103,8 @@ def profile_view(request):
 
 @login_required
 def settings_view(request):
+    from allauth.socialaccount.models import SocialAccount
+
     user_settings = request.user.settings
     if request.method == "POST":
         form = UserSettingsForm(request.POST, instance=user_settings, user=request.user)
@@ -116,7 +114,12 @@ def settings_view(request):
             return redirect("users:settings")
     else:
         form = UserSettingsForm(instance=user_settings, user=request.user)
-    return render(request, "registration/settings.html", {"form": form})
+    google_account = SocialAccount.objects.filter(user=request.user, provider="google").first()
+    return render(
+        request,
+        "registration/settings.html",
+        {"form": form, "google_account": google_account},
+    )
 
 
 class PasswordChangeView(DjangoPasswordChangeView):

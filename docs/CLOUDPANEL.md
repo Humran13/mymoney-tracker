@@ -108,6 +108,11 @@ Fill in, at minimum:
   another site on this VPS (**[VPS-ONLY]**: check `sudo ss -tlnp | grep 8001`)
 - SMTP settings, if you have a provider; otherwise leave blank (console
   backend — no email is actually sent)
+- `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`, if Google sign-in
+  is being enabled. Leave both blank to keep it safely disabled. The Google
+  Web client must use
+  `https://money.therealworldboosts.com/oauth/google/login/callback/` as its
+  exact authorized redirect URI.
 - Leave `DOMAIN` as-is; it's only read by the standalone Caddy profile,
   which you are not using in this mode
 
