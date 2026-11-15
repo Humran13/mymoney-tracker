@@ -19,6 +19,16 @@ def test_login_page_has_no_overflow_on_mobile(page, live_server, width):
     _assert_no_horizontal_overflow(page, width)
 
 
+def test_google_login_button_has_no_mobile_overflow(page, live_server, settings):
+    settings.GOOGLE_OAUTH_ENABLED = True
+    page.set_viewport_size({"width": 320, "height": 700})
+    page.goto(f"{live_server.url}/login/")
+    page.wait_for_load_state("networkidle")
+
+    assert page.get_by_role("button", name="Continue with Google").is_visible()
+    _assert_no_horizontal_overflow(page, 320)
+
+
 @pytest.mark.parametrize("width", MOBILE_WIDTHS)
 def test_register_page_has_no_overflow_on_mobile(page, live_server, width):
     page.set_viewport_size({"width": width, "height": 800})

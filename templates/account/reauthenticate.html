@@ -1,0 +1,15 @@
+{% extends "base/base.html" %}
+{% block title %}Confirm access · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="max-w-md">
+  <h1 class="text-xl font-semibold mb-2">Confirm access</h1>
+  <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Enter your MyMoney Tracker password before changing a Google connection.</p>
+  <form method="post" action="{% url 'account_reauthenticate' %}" class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6" novalidate>
+    {% csrf_token %}
+    {% include "base/_field.html" with field=form.password %}
+    {% if form.non_field_errors %}<p class="text-sm text-red-600 mb-3">{{ form.non_field_errors.0 }}</p>{% endif %}
+    {{ redirect_field }}
+    <button type="submit" class="w-full sm:w-auto bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Confirm</button>
+  </form>
+</div>
+{% endblock %}

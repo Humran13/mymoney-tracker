@@ -16,6 +16,7 @@ urlpatterns = [
     path("goals/", include("apps.goals.urls")),
     path("reports/", include("apps.reports.urls")),
     path("feedback/", include("apps.feedback.urls")),
+    path("oauth/", include("allauth.urls")),
     path("api/v1/", include("api.v1.urls")),
     path("", include("apps.dashboard.urls")),
     path("", include("apps.users.urls")),

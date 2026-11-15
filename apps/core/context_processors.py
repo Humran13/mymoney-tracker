@@ -6,4 +6,5 @@ def app_meta(request):
         "APP_NAME": "MyMoney Tracker",
         "APP_TAGLINE": "Track Your Money. Reach Your Goals.",
         "DEFAULT_CURRENCY_CODE": settings.DEFAULT_CURRENCY_CODE,
+        "GOOGLE_OAUTH_ENABLED": settings.GOOGLE_OAUTH_ENABLED,
     }

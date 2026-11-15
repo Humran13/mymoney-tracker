@@ -1,0 +1,40 @@
+{% extends "base/base.html" %}
+{% load socialaccount %}
+{% block title %}Google connection · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="max-w-lg">
+  <a href="{% url 'users:settings' %}" class="text-sm text-brand-600 dark:text-brand-400">&larr; Back to settings</a>
+  <h1 class="text-xl font-semibold mt-3 mb-4">Google connection</h1>
+  <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
+    {% if form.accounts %}
+      <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">Google is connected to this MyMoney Tracker account. Disconnecting requires your password and does not delete either account.</p>
+      <form method="post" action="{% url 'socialaccount_connections' %}">
+        {% csrf_token %}
+        {% for account in form.accounts %}
+          {% if account.provider == "google" %}
+            <div class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-4 min-w-0">
+              {% include "registration/_google_logo.html" %}
+              <div class="min-w-0">
+                <p class="text-sm font-medium">Google</p>
+                <p class="text-xs text-slate-500 truncate">{{ account.extra_data.email|default:"Connected Google account" }}</p>
+              </div>
+            </div>
+            <button type="submit" name="account" value="{{ account.pk }}" class="w-full sm:w-auto rounded-lg border border-red-300 dark:border-red-800 px-4 py-2.5 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950">Disconnect Google</button>
+          {% endif %}
+        {% endfor %}
+      </form>
+    {% elif GOOGLE_OAUTH_ENABLED %}
+      <p class="text-sm text-slate-600 dark:text-slate-300 mb-4">No Google account is connected. You will confirm your password before the connection is saved.</p>
+      <form method="post" action="{% provider_login_url 'google' process='connect' %}">
+        {% csrf_token %}
+        <button type="submit" class="w-full sm:w-auto min-h-11 inline-flex items-center justify-center gap-3 rounded-lg border border-slate-300 dark:border-slate-600 px-4 py-2.5 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700">
+          {% include "registration/_google_logo.html" %}
+          <span>Connect Google</span>
+        </button>
+      </form>
+    {% else %}
+      <p class="text-sm text-slate-500 dark:text-slate-400">Google sign-in is not configured on this server.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

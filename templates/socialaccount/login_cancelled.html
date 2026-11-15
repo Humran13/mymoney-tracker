@@ -1,0 +1,9 @@
+{% extends "base/base.html" %}
+{% block title %}Google sign-in cancelled · {{ APP_NAME }}{% endblock %}
+{% block guest_content %}
+<div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8 text-center">
+  <h1 class="text-xl font-semibold mb-2">Google sign-in cancelled</h1>
+  <p class="text-sm text-slate-500 dark:text-slate-400 mb-5">No changes were made to your account.</p>
+  <a href="{% url 'users:login' %}" class="text-brand-600 dark:text-brand-400 font-medium">Back to login</a>
+</div>
+{% endblock %}
