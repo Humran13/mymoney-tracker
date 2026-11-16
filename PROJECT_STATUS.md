@@ -5,6 +5,24 @@
 code complete and tested; **not yet deployed** (this session had no VPS access).
 See `PHASE13_HANDOFF.md` for the full record.
 
+## Phase 14 - debt offsets, one entry per person, bill fees (2026-11-17)
+
+- **Pay button (offset):** a person on both Lenders and Borrowers gets a Pay
+  button -> propose (default = smaller side) -> confirm -> `DebtSettlement` +
+  `DebtSettlementLine` rows. Noncash: no account FK, no `AccountPosting`.
+  Fully covered records flip to `settled` and leave the active lists; they
+  stay in the History section. Offset debts/loans cannot be deleted.
+- **One entry per person:** Lenders/Borrowers group by case- and
+  whitespace-insensitive name plus an optional `contact` (new field) so two
+  people sharing a name can be kept apart. Each entry expands to its
+  individual transactions. No data was rewritten; grouping is display-time.
+- **Recurring-bill fees:** `RecurringBill.transaction_fee` (default 0) and
+  `BillPayment.fee_amount`; the fee is editable at payment time and posts as a
+  separate FEE posting. The pay form carries the due date it displayed so a
+  double-submit cannot pay the next cycle.
+- **Migrations:** `debts/0005_debt_settlements_and_contact`,
+  `bills/0004_recurring_bill_transaction_fees` (additive only, defaults 0/"").
+
 ## Phase 13 — financial accuracy (2026-11-12)
 
 **Starting-balance boundary fixed in the calculation itself.** An account's

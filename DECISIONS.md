@@ -53,12 +53,24 @@ Newest at top isn't required here — this is organized by topic instead.
   from the principal repayment posting), so it naturally appears in income
   totals without a separate code path, while principal repayment is not
   counted as income.
+- **Debt offsets are separate rows, not fake repayments.** A settlement
+  between a person you owe and the same person who owes you is stored as
+  `DebtSettlementLine`s that `outstanding()` subtracts. Modelling it as a
+  `BorrowingRepayment` would have required a null paying account and would
+  have leaked into every cash-flow report as money that never moved.
+- **Person identity = normalized name + optional contact.** The only
+  identifier the app has is the typed name, so matching is case/whitespace
+  insensitive; the optional `contact` field is how a user keeps two
+  same-named people apart. Pay matching uses the same key.
 
 ## Recurring bills
 
 - **`BillPayment` has a unique constraint on `(bill, due_date)`.** This is
   what actually prevents a double-payment on the same cycle, rather than
   relying on UI state (which a double-click or two open tabs can defeat).
+- **Bill fees reuse the transaction ledger** (expense posting + separate FEE
+  posting), and the pay form binds to the due date it displayed, so a
+  double-submit cannot silently pay the following cycle.
 
 ## Daily closing
 

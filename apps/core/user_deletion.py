@@ -13,10 +13,19 @@ def delete_user_and_all_data(user):
     (they're the entire set of models with a PROTECT reference to
     FinancialAccount) clears the block before the cascade reaches it."""
     from apps.accounts.models import Transfer
-    from apps.debts.models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
+    from apps.debts.models import (
+        Borrowing,
+        BorrowingRepayment,
+        DebtSettlement,
+        DebtSettlementLine,
+        Lending,
+        LendingRepayment,
+    )
     from apps.transactions.models import Transaction
 
     with transaction.atomic():
+        DebtSettlementLine.objects.filter(user=user).delete()
+        DebtSettlement.objects.filter(user=user).delete()
         BorrowingRepayment.objects.filter(user=user).delete()
         LendingRepayment.objects.filter(user=user).delete()
         Transaction.objects.filter(user=user).delete()

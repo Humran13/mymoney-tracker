@@ -39,7 +39,13 @@
       <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm flex justify-between">
         <span>{{ r.date }} · {{ r.receiving_account.name }}</span><span class="font-medium">{{ r.total_received|money }}</span>
       </div>
-      {% empty %}<p class="text-slate-500 text-sm">No repayments yet.</p>{% endfor %}
+      {% empty %}{% if not lending.offset_lines.exists %}<p class="text-slate-500 text-sm">No repayments yet.</p>{% endif %}{% endfor %}
+      {% for line in lending.offset_lines.all %}
+      <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm">
+        <div class="flex justify-between gap-2"><span>{{ line.settlement.date }} · Offset against what you owe {{ line.settlement.person_name }}</span><span class="font-medium whitespace-nowrap">{{ line.amount|money }}</span></div>
+        <p class="text-xs text-slate-500">Noncash settlement; no account balance changed.</p>
+      </div>
+      {% endfor %}
     </div>
   </div>
 </div>

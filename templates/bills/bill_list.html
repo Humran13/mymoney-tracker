@@ -21,6 +21,7 @@
       <span class="text-xs">{{ bill.get_frequency_display }}</span>
     </div>
     <p class="text-xl font-bold mt-1">{{ bill.amount|money }}</p>
+    {% if bill.transaction_fee %}<p class="text-xs text-slate-500">+ {{ bill.transaction_fee|money }} transaction fee</p>{% endif %}
     <p class="text-xs text-slate-500 mt-1">
       Next due {{ bill.next_due_date }}
       {% if bill.is_overdue %}<span class="text-red-600 font-medium">· OVERDUE</span>
@@ -37,4 +38,16 @@
   <p class="text-slate-500 col-span-full">No recurring bills yet.</p>
   {% endfor %}
 </div>
+
+{% if payments %}
+<h2 class="font-semibold mt-8 mb-2">Payment history</h2>
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-700/50" data-testid="bill-payment-history">
+  {% for p in payments %}
+  <div class="p-3 text-sm">
+    <div class="flex justify-between gap-2"><span class="min-w-0 break-words">{{ p.paid_date }} · {{ p.bill.name }}</span><span class="font-medium whitespace-nowrap">{{ p.amount|money }}</span></div>
+    <p class="text-xs text-slate-500">Fee {{ p.fee_amount|money }} · total deducted {{ p.total_paid|money }}</p>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 {% endblock %}

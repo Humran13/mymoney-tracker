@@ -16,6 +16,7 @@ class RecurringBill(UserOwnedModel):
 
     name = models.CharField(max_length=150)
     amount = money_field()
+    transaction_fee = money_field(default=0, help_text="Default fee charged when paying this bill (e.g. mobile money charge). Can be changed at payment time.")
     category = models.ForeignKey("transactions.Category", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     payment_account = models.ForeignKey("accounts.FinancialAccount", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     frequency = models.CharField(max_length=10, choices=Frequency.choices, default=Frequency.MONTHLY)
@@ -54,6 +55,7 @@ class BillPayment(UserOwnedModel):
     due_date = models.DateField()
     paid_date = models.DateField()
     amount = money_field()
+    fee_amount = money_field(default=0, help_text="Transaction fee actually charged on this payment, on top of the bill amount.")
     transaction = models.OneToOneField("transactions.Transaction", on_delete=models.SET_NULL, null=True, blank=True, related_name="bill_payment")
 
     class Meta:
@@ -64,3 +66,6 @@ class BillPayment(UserOwnedModel):
 
     def __str__(self):
         return f"{self.bill.name} paid {self.paid_date}"
+
+    def total_paid(self):
+        return self.amount + (self.fee_amount or 0)

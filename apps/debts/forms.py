@@ -10,7 +10,7 @@ from .models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
 class BorrowingForm(forms.ModelForm):
     class Meta:
         model = Borrowing
-        fields = ["debt_type", "lender_name", "amount", "date_borrowed", "receiving_account", "due_date", "interest_amount", "notes"]
+        fields = ["debt_type", "lender_name", "contact", "amount", "date_borrowed", "receiving_account", "due_date", "interest_amount", "notes"]
         widgets = {
             "date_borrowed": forms.DateInput(attrs={"type": "date"}),
             "due_date": forms.DateInput(attrs={"type": "date"}),
@@ -104,7 +104,7 @@ class BorrowingRepaymentForm(forms.ModelForm):
 class LendingForm(forms.ModelForm):
     class Meta:
         model = Lending
-        fields = ["borrower_name", "amount", "date_lent", "source_account", "due_date", "interest_amount", "notes"]
+        fields = ["borrower_name", "contact", "amount", "date_lent", "source_account", "due_date", "interest_amount", "notes"]
         widgets = {
             "date_lent": forms.DateInput(attrs={"type": "date"}),
             "due_date": forms.DateInput(attrs={"type": "date"}),
@@ -148,3 +148,10 @@ class LendingRepaymentForm(forms.ModelForm):
                 f"That's more principal than the {self.lending.outstanding()} still owed on this lending."
             )
         return cleaned
+
+
+class SettlementForm(forms.Form):
+    amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
+    date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    notes = forms.CharField(max_length=255, required=False)
+    token = forms.UUIDField(widget=forms.HiddenInput)
