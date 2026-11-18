@@ -388,3 +388,124 @@ def reverse_settlement(*, user, settlement_id, date, notes="") -> DebtSettlement
             raise ValueError("Undoing this settlement would leave an incorrect balance.")
         _refresh_lending_status(lending)
     return reversal
+
+
+# --- Renaming a person -------------------------------------------------------
+
+LENDER, BORROWER = "lender", "borrower"  # dashboard columns: Borrowing / Lending records
+_SIDES = {
+    LENDER: (Borrowing, "lender_name", "Lenders"),
+    BORROWER: (Lending, "borrower_name", "Borrowers"),
+}
+
+
+class RenameError(ValueError):
+    pass
+
+
+def _side(side):
+    try:
+        return _SIDES[side]
+    except KeyError:
+        raise RenameError("Unknown list.") from None
+
+
+def rename_targets(user, side, name, contact="", *, pk=None, lock=False):
+    """Records on one side belonging to exactly this person (normalized name AND
+    contact), every status, or just record `pk` when renaming a single
+    transaction. Another person who merely shares the name is never included."""
+    model, name_attr, _ = _side(side)
+    qs = model.objects.filter(user=user).order_by("id")
+    if pk is not None:
+        qs = qs.filter(pk=pk)
+    if lock:
+        qs = qs.select_for_update()
+    wanted = person_key(name, contact)
+    return [r for r in qs if person_key(getattr(r, name_attr), r.contact) == wanted]
+
+
+def rename_preview(user, side, name, contact="", *, pk=None, new_name=None, new_contact=None) -> dict:
+    records = rename_targets(user, side, name, contact, pk=pk)
+    model, name_attr, _ = _side(side)
+    active = [r for r in records if r.status == "active"]
+    merges = False
+    if new_name is not None and records:
+        target = person_key(new_name, new_contact or "")
+        moving = {r.pk for r in records}
+        merges = any(
+            r.pk not in moving and person_key(getattr(r, name_attr), r.contact) == target
+            for r in model.objects.filter(user=user)
+        )
+    return {
+        "records": records,
+        "count": len(records),
+        "active_count": len(active),
+        "settled_count": len(records) - len(active),
+        "total": sum((r.outstanding() for r in active), ZERO),
+        "merges": merges,
+    }
+
+
+def _identity_exists(user, side, name, contact) -> bool:
+    model, name_attr, _ = _side(side)
+    key = person_key(name, contact)
+    return any(person_key(getattr(r, name_attr), r.contact) == key for r in model.objects.filter(user=user))
+
+
+@db_transaction.atomic
+def rename_person(*, user, side, name, contact="", new_name, new_contact="", pk=None, expected_count=None) -> dict:
+    """Change the name/contact on one person's records (or one record when `pk`
+    is given). Only the two text fields and updated_at are written: amounts,
+    repayments, settlements, reversals and account postings are untouched, and
+    no settlement or identity link is created. Identity links that referred to
+    the old identity are dropped once nothing on that side uses it any more, so
+    a stale confirmation can never silently match somebody new."""
+    model, name_attr, _ = _side(side)
+    new_name, new_contact = clean_name(new_name), clean_name(new_contact)
+    if not new_name:
+        raise RenameError("Enter a name.")
+    if len(new_name) > model._meta.get_field(name_attr).max_length:
+        raise RenameError("That name is too long.")
+    contact_field = model._meta.get_field("contact")
+    if len(new_contact) > contact_field.max_length:
+        raise RenameError("That contact is too long.")
+
+    records = rename_targets(user, side, name, contact, pk=pk, lock=True)
+    if not records:
+        raise RenameError("Those entries no longer exist. Reload the page and try again.")
+    if expected_count is not None and expected_count != len(records):
+        raise RenameError(
+            f"This person now has {len(records)} transaction{'s' if len(records) != 1 else ''}, not {expected_count}. "
+            "Review and submit again."
+        )
+
+    old_name, old_contact = clean_name(getattr(records[0], name_attr)), clean_name(records[0].contact)
+    changed = []
+    for record in records:
+        before = (getattr(record, name_attr), record.contact)
+        if before == (new_name, new_contact):
+            continue
+        setattr(record, name_attr, new_name)
+        record.contact = new_contact
+        record.save(update_fields=[name_attr, "contact", "updated_at"])
+        changed.append({"id": record.pk, "from_name": before[0], "from_contact": before[1]})
+
+    links_removed = 0
+    if changed and person_key(old_name, old_contact) != person_key(new_name, new_contact):
+        if not _identity_exists(user, side, old_name, old_contact):
+            old_name_key, old_contact_key = norm(old_name), norm(old_contact)
+            stale = PersonIdentityLink.objects.filter(user=user, name_key=old_name_key).filter(
+                contact_a=old_contact_key
+            ) | PersonIdentityLink.objects.filter(user=user, name_key=old_name_key, contact_b=old_contact_key)
+            links_removed = stale.delete()[0]
+    return {
+        "side": side,
+        "count": len(records),
+        "changed": changed,
+        "old_name": old_name,
+        "old_contact": old_contact,
+        "new_name": new_name,
+        "new_contact": new_contact,
+        "links_removed": links_removed,
+        "record_ids": [r.pk for r in records],
+    }

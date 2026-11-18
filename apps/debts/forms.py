@@ -160,3 +160,11 @@ class SettlementForm(forms.Form):
 class UndoSettlementForm(forms.Form):
     date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Undo date")
     notes = forms.CharField(max_length=255, required=False)
+
+
+class PersonRenameForm(forms.Form):
+    name = forms.CharField(max_length=150, label="Name")
+    contact = forms.CharField(max_length=60, required=False, label="Contact (optional)")
+    expected_count = forms.IntegerField(widget=forms.HiddenInput, min_value=0)
+    old_name = forms.CharField(widget=forms.HiddenInput)
+    old_contact = forms.CharField(widget=forms.HiddenInput, required=False)

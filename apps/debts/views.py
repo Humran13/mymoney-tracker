@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -17,6 +18,7 @@ from .forms import (
     BorrowingRepaymentForm,
     LendingForm,
     LendingRepaymentForm,
+    PersonRenameForm,
     SettlementForm,
     UndoSettlementForm,
 )
@@ -49,6 +51,91 @@ def dashboard(request):
             .prefetch_related("lines__borrowing", "lines__lending")[:20],
         },
     )
+
+
+def _rename(request, side, name, contact, record=None):
+    """Edit a person's name/contact across all their transactions on one side,
+    or on a single transaction. Never touches amounts, accounts or settlements."""
+    pk = record.pk if record else None
+    group_label = "Lenders" if side == settlements.LENDER else "Borrowers"
+    preview = settlements.rename_preview(request.user, side, name, contact, pk=pk)
+    if not preview["count"]:
+        messages.error(request, "That person was not found.")
+        return redirect("debts:dashboard")
+    if request.method == "POST":
+        form = PersonRenameForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            try:
+                result = settlements.rename_person(
+                    user=request.user, side=side, name=data["old_name"], contact=data["old_contact"],
+                    new_name=data["name"], new_contact=data["contact"], pk=pk,
+                    expected_count=data["expected_count"],
+                )
+            except settlements.RenameError as exc:
+                form.add_error(None, str(exc))
+            else:
+                if result["changed"]:
+                    log_audit_event(
+                        request.user, "update", affected_user=request.user, obj=preview["records"][0],
+                        description=f"Renamed {group_label.lower()[:-1]} '{result['old_name']}' to '{result['new_name']}'",
+                        metadata={
+                            "side": side, "scope": "transaction" if pk else "person",
+                            "old_name": result["old_name"], "old_contact": result["old_contact"],
+                            "new_name": result["new_name"], "new_contact": result["new_contact"],
+                            "records": result["changed"], "identity_links_removed": result["links_removed"],
+                        },
+                        request=request,
+                    )
+                    messages.success(
+                        request,
+                        f"Updated {len(result['changed'])} transaction{'s' if len(result['changed']) != 1 else ''} "
+                        f"to {result['new_name']}. No amounts or account balances changed.",
+                    )
+                else:
+                    messages.info(request, "Nothing changed.")
+                return redirect("debts:dashboard")
+        else:
+            form.is_bound = True
+        new_name, new_contact = request.POST.get("name"), request.POST.get("contact", "")
+        if new_name:
+            preview = settlements.rename_preview(
+                request.user, side, name, contact, pk=pk, new_name=new_name, new_contact=new_contact
+            )
+    else:
+        first = preview["records"][0]
+        shown_name = settlements.clean_name(getattr(first, "lender_name" if side == settlements.LENDER else "borrower_name"))
+        form = PersonRenameForm(
+            initial={
+                "name": shown_name, "contact": settlements.clean_name(first.contact),
+                "expected_count": preview["count"], "old_name": name, "old_contact": contact,
+            }
+        )
+    return render(
+        request,
+        "debts/person_rename.html",
+        {"form": form, "preview": preview, "group_label": group_label, "single": record, "side": side},
+    )
+
+
+@login_required
+def person_rename(request, side):
+    if side not in (settlements.LENDER, settlements.BORROWER):
+        raise Http404
+    source = request.POST if request.method == "POST" else request.GET
+    return _rename(request, side, source.get("old_name", source.get("name", "")), source.get("old_contact", source.get("contact", "")))
+
+
+@login_required
+def borrowing_rename(request, pk):
+    record = get_object_or_404(Borrowing, pk=pk, user=request.user)
+    return _rename(request, settlements.LENDER, record.lender_name, record.contact, record)
+
+
+@login_required
+def lending_rename(request, pk):
+    record = get_object_or_404(Lending, pk=pk, user=request.user)
+    return _rename(request, settlements.BORROWER, record.borrower_name, record.contact, record)
 
 
 @login_required

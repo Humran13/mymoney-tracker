@@ -235,3 +235,11 @@ Newest at top isn't required here — this is organized by topic instead.
   raising `ImproperlyConfigured` if it's still the insecure dev default —
   the one setting where failing loudly at startup is much better than
   silently running production on a known, guessable key.
+
+## Editing lender/borrower names
+
+- Renaming writes only `lender_name`/`borrower_name`, `contact` and `updated_at` (`settlements.rename_person`). It never touches amounts, repayments, settlements, reversals or postings, and never creates a settlement or identity link; Pay still needs the normal confirm step.
+- A group rename targets exactly one person on one side (normalized name AND contact, all statuses). A same-name person with a different contact is left alone. The form carries the transaction count the user saw; if it changed, the save is refused.
+- Identity links for the old name/contact are deleted once nothing on that side uses that identity any more, so renaming back can't resurrect an old confirmation. Links are kept while the identity is still in use.
+- Settlement `person_name` is history and is not rewritten; undo works from settlement lines, so it is unaffected by renames.
+- Each rename writes an `AuditEvent` (old/new name and contact, record ids, links removed).

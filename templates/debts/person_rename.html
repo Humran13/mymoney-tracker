@@ -1,0 +1,31 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Edit name · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="debts:dashboard" %}
+<h1 class="text-xl font-semibold mb-4">{% if single %}Edit name on this transaction{% else %}Edit name in {{ group_label }}{% endif %}</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <p class="text-sm mb-4" data-testid="rename-scope">
+    {% if single %}
+    Only this one transaction will be renamed. The person's other transactions keep their current name.
+    {% else %}
+    This will update <strong>{{ preview.count }} transaction{{ preview.count|pluralize }}</strong> for this person{% if preview.settled_count %} ({{ preview.active_count }} active, {{ preview.settled_count }} settled){% endif %}.
+    Other people who happen to share the name are not changed.
+    {% endif %}
+    Amounts, repayments, offsets and account balances stay exactly as they are.
+  </p>
+  {% if preview.merges %}
+  <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4" data-testid="rename-merge-note">An entry with this exact name and contact already exists in {{ group_label }}. After saving, they will be shown together as one person.</p>
+  {% endif %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {{ form.expected_count }}{{ form.old_name }}{{ form.old_contact }}
+    {% if form.non_field_errors %}<div class="text-sm text-red-600 mb-3" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% include "base/_field.html" with field=form.name %}
+    {% include "base/_field.html" with field=form.contact %}
+    <p class="text-xs text-slate-500 mb-4">Fixing a name never settles anything by itself. If the corrected name matches someone on the other list, you will be offered Pay (or asked to confirm they are the same person) on the Debts &amp; Loans page.</p>
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save name</button>
+    <a href="{% url 'debts:dashboard' %}" class="ml-2 text-sm text-slate-500">Cancel</a>
+  </form>
+</div>
+{% endblock %}
