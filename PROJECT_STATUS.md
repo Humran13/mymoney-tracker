@@ -20,6 +20,18 @@ See `PHASE13_HANDOFF.md` for the full record.
   `BillPayment.fee_amount`; the fee is editable at payment time and posts as a
   separate FEE posting. The pay form carries the due date it displayed so a
   double-submit cannot pay the next cycle.
+- **Undo offsets (follow-up):** an offset can be undone from History after a
+  confirmation page. The settlement and its lines are never touched; a
+  `DebtSettlementReversal` (one-to-one, so no double undo) makes
+  `outstanding()` stop counting them. Undo is blocked while a later repayment
+  or still-active offset exists on the same debt/loan (undo the later one
+  first). No account postings are created.
+- **Person matching (follow-up):** Pay now works on confirmed *pairs* of a
+  lender group and a borrower group. Equal contacts (or blank on both sides
+  with nobody else sharing the name) match automatically; a missing contact on
+  one side, or a blank/blank match when several people share the name, asks
+  the user to confirm (`PersonIdentityLink`, removable); conflicting contacts
+  are never combined. Migration: `debts/0006_settlement_reversals_and_identity_links`.
 - **Migrations:** `debts/0005_debt_settlements_and_contact`,
   `bills/0004_recurring_bill_transaction_fees` (additive only, defaults 0/"").
 

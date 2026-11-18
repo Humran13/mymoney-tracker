@@ -17,6 +17,8 @@ def delete_user_and_all_data(user):
         Borrowing,
         BorrowingRepayment,
         DebtSettlement,
+        DebtSettlementReversal,
+        PersonIdentityLink,
         DebtSettlementLine,
         Lending,
         LendingRepayment,
@@ -24,6 +26,8 @@ def delete_user_and_all_data(user):
     from apps.transactions.models import Transaction
 
     with transaction.atomic():
+        DebtSettlementReversal.objects.filter(user=user).delete()
+        PersonIdentityLink.objects.filter(user=user).delete()
         DebtSettlementLine.objects.filter(user=user).delete()
         DebtSettlement.objects.filter(user=user).delete()
         BorrowingRepayment.objects.filter(user=user).delete()

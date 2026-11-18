@@ -61,7 +61,7 @@ class Borrowing(UserOwnedModel):
         return self.repayments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
 
     def total_offset(self) -> Decimal:
-        return self.offset_lines.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+        return self.offset_lines.filter(settlement__reversal__isnull=True).aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
 
     def outstanding(self) -> Decimal:
         return self.total_owed() - self.total_repaid() - self.total_offset()
@@ -158,7 +158,7 @@ class Lending(UserOwnedModel):
         return self.repayments.aggregate(total=models.Sum("interest_amount"))["total"] or Decimal("0.00")
 
     def total_offset(self) -> Decimal:
-        return self.offset_lines.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+        return self.offset_lines.filter(settlement__reversal__isnull=True).aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
 
     def outstanding(self) -> Decimal:
         return self.amount - self.total_principal_received() - self.total_offset()
@@ -234,3 +234,39 @@ class DebtSettlementLine(UserOwnedModel):
 
     def __str__(self):
         return f"{self.amount} applied to {self.borrowing or self.lending}"
+
+
+class DebtSettlementReversal(UserOwnedModel):
+    """Audit record that a settlement was undone. The settlement and its lines
+    are never edited or deleted; `outstanding()` simply stops counting lines
+    whose settlement has a reversal. The one-to-one makes a second reversal of
+    the same settlement impossible at the database level. Like the settlement
+    itself, it has no account FK and never produces postings."""
+
+    settlement = models.OneToOneField(DebtSettlement, on_delete=models.PROTECT, related_name="reversal")
+    date = models.DateField()
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+
+    def __str__(self):
+        return f"Reversal of {self.settlement}"
+
+
+class PersonIdentityLink(UserOwnedModel):
+    """The user's confirmation that two records with the same name but a
+    missing contact on one side are the same person. Contacts are stored
+    normalized and in sorted order, so (a, b) and (b, a) are one link."""
+
+    name_key = models.CharField(max_length=150)
+    contact_a = models.CharField(max_length=60, blank=True)
+    contact_b = models.CharField(max_length=60, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "name_key", "contact_a", "contact_b"], name="unique_identity_link"),
+        ]
+
+    def __str__(self):
+        return f"{self.name_key}: '{self.contact_a}' = '{self.contact_b}'"

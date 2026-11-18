@@ -45,9 +45,10 @@ def lend(user, wallet, name, amount, *, contact="", notes="", date=TODAY):
     )
 
 
-def settle(user, name, amount, *, contact="", token=None, date=TODAY):
+def settle(user, name, amount, *, contact="", other_contact=None, token=None, date=TODAY):
     return settlements.settle_with_person(
-        user=user, name=name, contact=contact, amount=D(amount), date=date, token=token or uuid.uuid4()
+        user=user, name=name, contact=contact, other_contact=other_contact, amount=D(amount), date=date,
+        token=token or uuid.uuid4(),
     )
 
 

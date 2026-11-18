@@ -26,7 +26,9 @@ def outstanding_borrowing_as_of(borrowing: Borrowing, as_of_date) -> Decimal:
         or Decimal("0.00")
     )
     offset = (
-        borrowing.offset_lines.filter(settlement__date__lte=as_of_date).aggregate(total=Sum("amount"))["total"]
+        borrowing.offset_lines.filter(settlement__date__lte=as_of_date)
+        .exclude(settlement__reversal__date__lte=as_of_date)
+        .aggregate(total=Sum("amount"))["total"]
         or Decimal("0.00")
     )
     return borrowing.total_owed() - repaid - offset
@@ -40,7 +42,9 @@ def outstanding_lending_as_of(lending: Lending, as_of_date) -> Decimal:
         or Decimal("0.00")
     )
     offset = (
-        lending.offset_lines.filter(settlement__date__lte=as_of_date).aggregate(total=Sum("amount"))["total"]
+        lending.offset_lines.filter(settlement__date__lte=as_of_date)
+        .exclude(settlement__reversal__date__lte=as_of_date)
+        .aggregate(total=Sum("amount"))["total"]
         or Decimal("0.00")
     )
     return lending.amount - received - offset

@@ -1,0 +1,32 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Undo offset · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="debts:dashboard" %}
+<h1 class="text-xl font-semibold mb-4">Undo offset with {{ settlement.person_name }}</h1>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  <p class="text-sm mb-3">Offset of <strong>{{ settlement.amount|money }}</strong> recorded on {{ settlement.date }}.</p>
+  <ul class="text-sm mb-4 space-y-1" data-testid="undo-effects">
+    {% for line in settlement.lines.all %}
+    <li>{{ line.amount|money }} will be owed again on the {% if line.borrowing %}debt of {{ line.borrowing.amount|money }} ({{ line.borrowing.date_borrowed }}){% else %}loan of {{ line.lending.amount|money }} ({{ line.lending.date_lent }}){% endif %}.</li>
+    {% endfor %}
+  </ul>
+  <p class="text-xs text-slate-500 mb-4">The original offset stays in History, marked as reversed, together with a record of this undo. No bank, mobile money or cash balance changes.</p>
+  {% if blockers %}
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm mb-4" data-testid="undo-blocked">
+    <p class="font-medium mb-1">This offset can&#39;t be undone yet</p>
+    {% for reason in blockers %}<p>{{ reason }}</p>{% endfor %}
+  </div>
+  <a href="{% url 'debts:dashboard' %}" class="text-sm text-slate-500">Back</a>
+  {% else %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% for error in form.non_field_errors %}<p class="mb-3 text-xs text-red-600">{{ error }}</p>{% endfor %}
+    {% include "base/_field.html" with field=form.date %}
+    {% include "base/_field.html" with field=form.notes %}
+    <button type="submit" id="submit-btn" class="bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg px-5 py-2.5">Confirm undo</button>
+    <a href="{% url 'debts:dashboard' %}" class="ml-2 text-sm text-slate-500">Cancel</a>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

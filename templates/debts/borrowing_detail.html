@@ -76,7 +76,7 @@
       {% for line in borrowing.offset_lines.all %}
       <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm">
         <div class="flex justify-between gap-2"><span>{{ line.settlement.date }} · Offset against what {{ line.settlement.person_name }} owes you</span><span class="font-medium whitespace-nowrap">{{ line.amount|money }}</span></div>
-        <p class="text-xs text-slate-500">Noncash settlement; no account balance changed.</p>
+        <p class="text-xs text-slate-500">Noncash settlement; no account balance changed.{% if line.settlement.reversal %} <span class="font-medium text-amber-700">Reversed on {{ line.settlement.reversal.date }}; this amount is owed again.</span>{% endif %}</p>
       </div>
       {% endfor %}
     </div>

@@ -155,3 +155,8 @@ class SettlementForm(forms.Form):
     date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
     notes = forms.CharField(max_length=255, required=False)
     token = forms.UUIDField(widget=forms.HiddenInput)
+
+
+class UndoSettlementForm(forms.Form):
+    date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}), label="Undo date")
+    notes = forms.CharField(max_length=255, required=False)
