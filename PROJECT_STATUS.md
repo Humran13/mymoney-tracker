@@ -259,6 +259,19 @@ before and after).
 
 ## Known limitations
 
+- **Open `npm audit` finding (no patch exists, 2026-11-18):** picomatch ReDoS,
+  GHSA-fc5q-39xc-vjpf / CVE-2026-112366, high (CVSS 7.5), affects picomatch
+  <= 4.0.7 with no patched release (latest on npm is 4.0.7). It arrives
+  through Tailwind CSS 3.4.17 (`tailwindcss` -> `micromatch`/`chokidar` ->
+  `picomatch` 2.3.2, and `sucrase` -> `tinyglobby`/`fdir` -> `picomatch` 4.0.7),
+  so the CI `dependency-audit` job fails until picomatch is patched.
+  Exposure is low: it is a dev dependency used only by the CSS build, it
+  matches the repo's own `templates/**/*.html` globs (no untrusted patterns),
+  and Node never ships in the runtime image. `npm audit fix` cannot help;
+  `--force` would jump to Tailwind 4 (breaking), so it was deliberately not
+  done. Re-check `npm audit` when picomatch publishes a fix, then bump the
+  lockfile; do not silence the audit.
+
 - **Real SMTP delivery not verified** — configured and unit-tested against
   Django's test backend only; no live provider credentials were available.
 - **CloudPanel reverse-proxy configuration not verified against a real
