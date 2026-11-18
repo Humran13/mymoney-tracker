@@ -1,35 +1,193 @@
+import uuid
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.audit import log_audit_event
 
-from . import services
-from .forms import BorrowingForm, BorrowingReclassifyForm, BorrowingRepaymentForm, LendingForm, LendingRepaymentForm
-from .models import Borrowing, BorrowingRepayment, Lending
+from . import services, settlements
+from .forms import (
+    BorrowingForm,
+    BorrowingReclassifyForm,
+    BorrowingRepaymentForm,
+    LendingForm,
+    LendingRepaymentForm,
+    SettlementForm,
+    UndoSettlementForm,
+)
+from .models import Borrowing, BorrowingRepayment, DebtSettlement, Lending
 
 
 @login_required
 def dashboard(request):
-    borrowings = Borrowing.objects.filter(user=request.user, status=Borrowing.Status.ACTIVE).select_related("receiving_account")
-    lendings = Lending.objects.filter(user=request.user, status=Lending.Status.ACTIVE).select_related("source_account")
-
-    total_owed_by_me = sum((b.outstanding() for b in borrowings), Decimal("0.00"))
-    total_owed_to_me = sum((l.outstanding() for l in lendings), Decimal("0.00"))
+    positions = settlements.debt_positions(request.user)
+    lenders, borrowers = positions["lenders"], positions["borrowers"]
+    total_owed_by_me = sum((g["total"] for g in lenders), Decimal("0.00"))
+    total_owed_to_me = sum((g["total"] for g in borrowers), Decimal("0.00"))
+    for group in (*lenders, *borrowers):
+        confirmed = [p for p in group["pairs"] if p["state"] == settlements.CONFIRMED]
+        group["confirmed_pairs"] = [p for p in confirmed if p["offsettable"] > 0]
+        group["pending_pairs"] = [p for p in group["pairs"] if p["state"] == settlements.NEEDS_CONFIRMATION]
 
     return render(
         request,
         "debts/dashboard.html",
         {
-            "borrowings": borrowings,
-            "lendings": lendings,
+            "lenders": lenders,
+            "borrowers": borrowers,
             "total_owed_by_me": total_owed_by_me,
             "total_owed_to_me": total_owed_to_me,
+            "settled_borrowings": Borrowing.objects.filter(user=request.user, status=Borrowing.Status.SETTLED)[:20],
+            "settled_lendings": Lending.objects.filter(user=request.user, status=Lending.Status.SETTLED)[:20],
+            "settlements": DebtSettlement.objects.filter(user=request.user)
+            .select_related("reversal")
+            .prefetch_related("lines__borrowing", "lines__lending")[:20],
         },
     )
+
+
+@login_required
+def settle(request):
+    """Propose, confirm, then record a noncash offset with one person. The
+    amount is re-validated against live balances again on the confirm POST."""
+    source = request.POST if request.method == "POST" else request.GET
+    name, contact = source.get("name", ""), source.get("contact", "")
+    other_contact = source.get("other_contact", contact)
+    summary = settlements.settlement_summary(request.user, name, contact, other_contact)
+    if not summary["borrowings"] or not summary["lendings"]:
+        messages.info(request, "Nothing to offset with this person right now.")
+        return redirect("debts:dashboard")
+    if summary["state"] != settlements.CONFIRMED:
+        if summary["state"] == settlements.NEEDS_CONFIRMATION:
+            messages.info(request, "Confirm that these entries are the same person first.")
+            query = urlencode({"name": name, "contact": contact, "other_contact": other_contact})
+            return redirect(f"{reverse('debts:identity')}?{query}")
+        messages.error(request, "These entries have different contacts, so they are treated as different people.")
+        return redirect("debts:dashboard")
+
+    context = {
+        "summary": summary, "name": name, "contact": contact, "other_contact": other_contact, "confirming": False,
+    }
+    if request.method == "POST":
+        form = SettlementForm(request.POST)
+        if form.is_valid():
+            amount = form.cleaned_data["amount"]
+            if amount > summary["maximum"]:
+                form.add_error("amount", f"The most you can offset is {summary['maximum']:,.2f}.")
+            elif request.POST.get("confirm") == "1":
+                try:
+                    result = settlements.settle_with_person(
+                        user=request.user,
+                        name=name,
+                        contact=contact,
+                        other_contact=other_contact,
+                        amount=amount,
+                        date=form.cleaned_data["date"],
+                        notes=form.cleaned_data["notes"],
+                        token=form.cleaned_data["token"],
+                    )
+                except settlements.DuplicateSettlement:
+                    messages.info(request, "That settlement was already recorded.")
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                else:
+                    log_audit_event(request.user, "create", obj=result, description="Offset debts with the same person")
+                    messages.success(
+                        request, f"Offset {amount:,.0f} with {summary['display_name']}. No account balance changed."
+                    )
+                return redirect("debts:dashboard")
+            else:
+                context.update(
+                    confirming=True,
+                    remaining_owed_by_me=summary["owed_by_me"] - amount,
+                    remaining_owed_to_me=summary["owed_to_me"] - amount,
+                )
+    else:
+        form = SettlementForm(initial={"amount": summary["maximum"], "date": timezone.localdate(), "token": uuid.uuid4()})
+    context["form"] = form
+    return render(request, "debts/settle.html", context)
+
+
+@login_required
+def identity_confirm(request):
+    """Ask the user to confirm that a lender-side and a borrower-side entry are
+    the same person. Only offered when the names match and the contacts do not
+    conflict; when several people share the name, each candidate has its own
+    confirm page, so the choice is always explicit."""
+    source = request.POST if request.method == "POST" else request.GET
+    name, contact = source.get("name", ""), source.get("contact", "")
+    other_contact = source.get("other_contact", "")
+    found = settlements.find_pair(request.user, name, contact, other_contact)
+    if found is None:
+        messages.error(request, "Those entries cannot be matched.")
+        return redirect("debts:dashboard")
+    lender, borrower, pair = found
+    if request.method == "POST":
+        try:
+            settlements.confirm_identity(user=request.user, name=name, contact=contact, other_contact=other_contact)
+        except settlements.IdentityError as exc:
+            messages.error(request, str(exc))
+            return redirect("debts:dashboard")
+        messages.success(request, f"{lender['name']} is now recognised as the same person on both sides.")
+        return redirect("debts:dashboard")
+    return render(
+        request,
+        "debts/identity_confirm.html",
+        {
+            "lender": lender, "borrower": borrower, "pair": pair,
+            "name": name, "contact": contact, "other_contact": other_contact,
+        },
+    )
+
+
+@login_required
+def identity_unlink(request):
+    if request.method == "POST":
+        settlements.unlink_identity(
+            user=request.user,
+            name=request.POST.get("name", ""),
+            contact=request.POST.get("contact", ""),
+            other_contact=request.POST.get("other_contact", ""),
+        )
+        messages.success(request, "Those entries are no longer treated as the same person.")
+    return redirect("debts:dashboard")
+
+
+@login_required
+def settlement_undo(request, pk):
+    settlement = get_object_or_404(
+        DebtSettlement.objects.select_related("reversal").prefetch_related("lines__borrowing", "lines__lending"),
+        pk=pk,
+        user=request.user,
+    )
+    if hasattr(settlement, "reversal"):
+        messages.info(request, "This settlement was already undone.")
+        return redirect("debts:dashboard")
+    blockers = settlements.reversal_blockers(settlement)
+    form = UndoSettlementForm(request.POST or None, initial={"date": timezone.localdate()})
+    if request.method == "POST" and not blockers and form.is_valid():
+        try:
+            reversal = settlements.reverse_settlement(
+                user=request.user,
+                settlement_id=settlement.pk,
+                date=form.cleaned_data["date"],
+                notes=form.cleaned_data["notes"],
+            )
+        except settlements.AlreadyReversed:
+            messages.info(request, "This settlement was already undone.")
+            return redirect("debts:dashboard")
+        except ValueError as exc:
+            form.add_error(None, str(exc))
+        else:
+            log_audit_event(request.user, "update", obj=reversal, description="Undid a debt offset")
+            messages.success(request, "Settlement undone. Both balances were restored; no account balance changed.")
+            return redirect("debts:dashboard")
+    return render(request, "debts/settlement_undo.html", {"settlement": settlement, "form": form, "blockers": blockers})
 
 
 @login_required
@@ -93,7 +251,11 @@ def borrowing_reclassify(request, pk):
 def borrowing_delete(request, pk):
     borrowing = get_object_or_404(Borrowing, pk=pk, user=request.user)
     if request.method == "POST":
-        services.delete_borrowing(borrowing)
+        try:
+            services.delete_borrowing(borrowing)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("debts:borrowing_detail", pk=pk)
         messages.success(request, "Borrowing record deleted.")
         return redirect("debts:dashboard")
     return render(request, "debts/borrowing_delete_confirm.html", {"borrowing": borrowing})
@@ -172,7 +334,11 @@ def lending_detail(request, pk):
 def lending_delete(request, pk):
     lending = get_object_or_404(Lending, pk=pk, user=request.user)
     if request.method == "POST":
-        services.delete_lending(lending)
+        try:
+            services.delete_lending(lending)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("debts:lending_detail", pk=pk)
         messages.success(request, "Lending record deleted.")
         return redirect("debts:dashboard")
     return render(request, "debts/lending_delete_confirm.html", {"lending": lending})

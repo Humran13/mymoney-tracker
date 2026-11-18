@@ -7,6 +7,7 @@
   <form method="post" novalidate>
     {% csrf_token %}
     {% include "base/_field.html" with field=form.borrower_name %}
+    {% include "base/_field.html" with field=form.contact %}
     {% include "base/_field.html" with field=form.amount %}
     {% include "base/_field.html" with field=form.date_lent %}
     {% include "base/_field.html" with field=form.source_account %}

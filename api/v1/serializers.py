@@ -162,7 +162,7 @@ class BorrowingSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = Borrowing
         fields = [
-            "id", "debt_type", "lender_name", "amount", "date_borrowed", "receiving_account",
+            "id", "debt_type", "lender_name", "contact", "amount", "date_borrowed", "receiving_account",
             "due_date", "interest_amount", "notes", "status", "outstanding",
         ]
         read_only_fields = ["id", "status"]
@@ -215,7 +215,7 @@ class LendingSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
     class Meta:
         model = Lending
         fields = [
-            "id", "borrower_name", "amount", "date_lent", "source_account",
+            "id", "borrower_name", "contact", "amount", "date_lent", "source_account",
             "due_date", "interest_amount", "notes", "status", "outstanding",
         ]
         read_only_fields = ["id", "status"]
@@ -257,7 +257,7 @@ class RecurringBillSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
 
     class Meta:
         model = RecurringBill
-        fields = ["id", "name", "amount", "category", "payment_account", "frequency", "next_due_date", "status", "notes", "is_overdue"]
+        fields = ["id", "name", "amount", "transaction_fee", "category", "payment_account", "frequency", "next_due_date", "status", "notes", "is_overdue"]
 
     def get_is_overdue(self, obj):
         return obj.is_overdue()
@@ -270,7 +270,7 @@ class RecurringBillSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
 class BillPaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = BillPayment
-        fields = ["id", "bill", "due_date", "paid_date", "amount", "transaction"]
+        fields = ["id", "bill", "due_date", "paid_date", "amount", "fee_amount", "transaction"]
         read_only_fields = fields
 
 

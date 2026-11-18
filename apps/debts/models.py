@@ -28,6 +28,11 @@ class Borrowing(UserOwnedModel):
         help_text="Cash Loan is the only type that actually deposits money into an account.",
     )
     lender_name = models.CharField(max_length=150, help_text="Lender, supplier, or creditor.")
+    contact = models.CharField(
+        max_length=60,
+        blank=True,
+        help_text="Optional phone or ID. Two people with the same name stay separate if their contacts differ.",
+    )
     amount = money_field()
     date_borrowed = models.DateField()
     receiving_account = models.ForeignKey(
@@ -55,8 +60,11 @@ class Borrowing(UserOwnedModel):
     def total_repaid(self) -> Decimal:
         return self.repayments.aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
 
+    def total_offset(self) -> Decimal:
+        return self.offset_lines.filter(settlement__reversal__isnull=True).aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+
     def outstanding(self) -> Decimal:
-        return self.total_owed() - self.total_repaid()
+        return self.total_owed() - self.total_repaid() - self.total_offset()
 
     def is_overdue(self) -> bool:
         from django.utils import timezone
@@ -121,6 +129,11 @@ class Lending(UserOwnedModel):
         SETTLED = "settled", "Settled"
 
     borrower_name = models.CharField(max_length=150)
+    contact = models.CharField(
+        max_length=60,
+        blank=True,
+        help_text="Optional phone or ID. Two people with the same name stay separate if their contacts differ.",
+    )
     amount = money_field()
     date_lent = models.DateField()
     source_account = models.ForeignKey("accounts.FinancialAccount", on_delete=models.PROTECT, related_name="lendings")
@@ -144,8 +157,11 @@ class Lending(UserOwnedModel):
     def total_interest_received(self) -> Decimal:
         return self.repayments.aggregate(total=models.Sum("interest_amount"))["total"] or Decimal("0.00")
 
+    def total_offset(self) -> Decimal:
+        return self.offset_lines.filter(settlement__reversal__isnull=True).aggregate(total=models.Sum("amount"))["total"] or Decimal("0.00")
+
     def outstanding(self) -> Decimal:
-        return self.amount - self.total_principal_received()
+        return self.amount - self.total_principal_received() - self.total_offset()
 
     def is_overdue(self) -> bool:
         from django.utils import timezone
@@ -169,3 +185,88 @@ class LendingRepayment(UserOwnedModel):
 
     def __str__(self):
         return f"Received {self.total_received()} from {self.lending.borrower_name}"
+
+
+class DebtSettlement(UserOwnedModel):
+    """A noncash offset between what the user owes a person and what that
+    person owes the user. It reduces both sides by the same amount and never
+    touches a financial account — there is deliberately no account FK and no
+    AccountPosting is ever written for it. Rows are never deleted: the audit
+    trail of who offset what, when, is the point."""
+
+    person_name = models.CharField(max_length=150)
+    person_key = models.CharField(max_length=250, db_index=True)
+    amount = money_field()
+    date = models.DateField()
+    notes = models.CharField(max_length=255, blank=True)
+    idempotency_key = models.UUIDField(help_text="Submitted with the confirmation form so a double-click or refresh cannot post twice.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "idempotency_key"], name="unique_settlement_token_per_user"),
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="settlement_amount_positive"),
+        ]
+
+    def __str__(self):
+        return f"Offset {self.amount} with {self.person_name} on {self.date}"
+
+
+class DebtSettlementLine(UserOwnedModel):
+    """How a settlement was applied to one specific debt (borrowing) or loan
+    (lending). Exactly one of the two foreign keys is set."""
+
+    settlement = models.ForeignKey(DebtSettlement, on_delete=models.PROTECT, related_name="lines")
+    borrowing = models.ForeignKey(Borrowing, on_delete=models.PROTECT, null=True, blank=True, related_name="offset_lines")
+    lending = models.ForeignKey(Lending, on_delete=models.PROTECT, null=True, blank=True, related_name="offset_lines")
+    amount = money_field()
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(borrowing__isnull=False, lending__isnull=True) | models.Q(borrowing__isnull=True, lending__isnull=False)),
+                name="settlement_line_exactly_one_target",
+            ),
+            models.CheckConstraint(condition=models.Q(amount__gt=0), name="settlement_line_amount_positive"),
+        ]
+
+    def __str__(self):
+        return f"{self.amount} applied to {self.borrowing or self.lending}"
+
+
+class DebtSettlementReversal(UserOwnedModel):
+    """Audit record that a settlement was undone. The settlement and its lines
+    are never edited or deleted; `outstanding()` simply stops counting lines
+    whose settlement has a reversal. The one-to-one makes a second reversal of
+    the same settlement impossible at the database level. Like the settlement
+    itself, it has no account FK and never produces postings."""
+
+    settlement = models.OneToOneField(DebtSettlement, on_delete=models.PROTECT, related_name="reversal")
+    date = models.DateField()
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+
+    def __str__(self):
+        return f"Reversal of {self.settlement}"
+
+
+class PersonIdentityLink(UserOwnedModel):
+    """The user's confirmation that two records with the same name but a
+    missing contact on one side are the same person. Contacts are stored
+    normalized and in sorted order, so (a, b) and (b, a) are one link."""
+
+    name_key = models.CharField(max_length=150)
+    contact_a = models.CharField(max_length=60, blank=True)
+    contact_b = models.CharField(max_length=60, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "name_key", "contact_a", "contact_b"], name="unique_identity_link"),
+        ]
+
+    def __str__(self):
+        return f"{self.name_key}: '{self.contact_a}' = '{self.contact_b}'"

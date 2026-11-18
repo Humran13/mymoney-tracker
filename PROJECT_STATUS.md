@@ -5,6 +5,36 @@
 code complete and tested; **not yet deployed** (this session had no VPS access).
 See `PHASE13_HANDOFF.md` for the full record.
 
+## Phase 14 - debt offsets, one entry per person, bill fees (2026-11-17)
+
+- **Pay button (offset):** a person on both Lenders and Borrowers gets a Pay
+  button -> propose (default = smaller side) -> confirm -> `DebtSettlement` +
+  `DebtSettlementLine` rows. Noncash: no account FK, no `AccountPosting`.
+  Fully covered records flip to `settled` and leave the active lists; they
+  stay in the History section. Offset debts/loans cannot be deleted.
+- **One entry per person:** Lenders/Borrowers group by case- and
+  whitespace-insensitive name plus an optional `contact` (new field) so two
+  people sharing a name can be kept apart. Each entry expands to its
+  individual transactions. No data was rewritten; grouping is display-time.
+- **Recurring-bill fees:** `RecurringBill.transaction_fee` (default 0) and
+  `BillPayment.fee_amount`; the fee is editable at payment time and posts as a
+  separate FEE posting. The pay form carries the due date it displayed so a
+  double-submit cannot pay the next cycle.
+- **Undo offsets (follow-up):** an offset can be undone from History after a
+  confirmation page. The settlement and its lines are never touched; a
+  `DebtSettlementReversal` (one-to-one, so no double undo) makes
+  `outstanding()` stop counting them. Undo is blocked while a later repayment
+  or still-active offset exists on the same debt/loan (undo the later one
+  first). No account postings are created.
+- **Person matching (follow-up):** Pay now works on confirmed *pairs* of a
+  lender group and a borrower group. Equal contacts (or blank on both sides
+  with nobody else sharing the name) match automatically; a missing contact on
+  one side, or a blank/blank match when several people share the name, asks
+  the user to confirm (`PersonIdentityLink`, removable); conflicting contacts
+  are never combined. Migration: `debts/0006_settlement_reversals_and_identity_links`.
+- **Migrations:** `debts/0005_debt_settlements_and_contact`,
+  `bills/0004_recurring_bill_transaction_fees` (additive only, defaults 0/"").
+
 ## Phase 13 — financial accuracy (2026-11-12)
 
 **Starting-balance boundary fixed in the calculation itself.** An account's
@@ -228,6 +258,19 @@ before and after).
 - **Secret scan clean** (see above) before any publish step was attempted.
 
 ## Known limitations
+
+- **Open `npm audit` finding (no patch exists, 2026-11-18):** picomatch ReDoS,
+  GHSA-fc5q-39xc-vjpf / CVE-2026-112366, high (CVSS 7.5), affects picomatch
+  <= 4.0.7 with no patched release (latest on npm is 4.0.7). It arrives
+  through Tailwind CSS 3.4.17 (`tailwindcss` -> `micromatch`/`chokidar` ->
+  `picomatch` 2.3.2, and `sucrase` -> `tinyglobby`/`fdir` -> `picomatch` 4.0.7),
+  so the CI `dependency-audit` job fails until picomatch is patched.
+  Exposure is low: it is a dev dependency used only by the CSS build, it
+  matches the repo's own `templates/**/*.html` globs (no untrusted patterns),
+  and Node never ships in the runtime image. `npm audit fix` cannot help;
+  `--force` would jump to Tailwind 4 (breaking), so it was deliberately not
+  done. Re-check `npm audit` when picomatch publishes a fix, then bump the
+  lockfile; do not silence the audit.
 
 - **Real SMTP delivery not verified** — configured and unit-tested against
   Django's test backend only; no live provider credentials were available.

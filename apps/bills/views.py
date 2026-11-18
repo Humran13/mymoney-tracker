@@ -7,7 +7,7 @@ from apps.core.audit import log_audit_event
 
 from . import services
 from .forms import PayBillForm, RecurringBillForm
-from .models import RecurringBill
+from .models import BillPayment, RecurringBill
 
 
 @login_required
@@ -15,7 +15,10 @@ def bill_list(request):
     bills = RecurringBill.objects.filter(user=request.user).select_related("category", "payment_account")
     overdue = [b for b in bills if b.is_overdue()]
     due_soon = [b for b in bills if not b.is_overdue() and b.is_due_soon(request.user.settings.bill_reminder_days_ahead)]
-    return render(request, "bills/bill_list.html", {"bills": bills, "overdue": overdue, "due_soon": due_soon})
+    payments = BillPayment.objects.filter(user=request.user).select_related("bill")[:15]
+    return render(
+        request, "bills/bill_list.html", {"bills": bills, "overdue": overdue, "due_soon": due_soon, "payments": payments}
+    )
 
 
 @login_required
@@ -80,6 +83,8 @@ def bill_pay(request, pk):
                     paid_date=form.cleaned_data["paid_date"],
                     account=form.cleaned_data["account"],
                     amount=form.cleaned_data["amount"],
+                    fee_amount=form.cleaned_data["fee_amount"],
+                    expected_due_date=form.cleaned_data["due_date"],
                 )
                 messages.success(request, f"Payment for '{bill.name}' recorded.")
             except ValueError as exc:
@@ -88,6 +93,12 @@ def bill_pay(request, pk):
     else:
         form = PayBillForm(
             user=request.user,
-            initial={"paid_date": timezone.localdate(), "account": bill.payment_account, "amount": bill.amount},
+            initial={
+                "paid_date": timezone.localdate(),
+                "account": bill.payment_account,
+                "amount": bill.amount,
+                "fee_amount": bill.transaction_fee,
+                "due_date": bill.next_due_date,
+            },
         )
     return render(request, "bills/bill_pay.html", {"form": form, "bill": bill})

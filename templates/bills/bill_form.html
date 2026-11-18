@@ -8,6 +8,7 @@
     {% csrf_token %}
     {% include "base/_field.html" with field=form.name %}
     {% include "base/_field.html" with field=form.amount %}
+    {% include "base/_field.html" with field=form.transaction_fee %}
     {% include "base/_field.html" with field=form.category %}
     {% include "base/_field.html" with field=form.payment_account %}
     {% include "base/_field.html" with field=form.frequency %}

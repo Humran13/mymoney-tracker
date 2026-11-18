@@ -25,15 +25,40 @@
   <div>
     <h2 class="font-semibold mb-2">Lenders</h2>
     <div class="space-y-2">
-      {% for b in borrowings %}
-      <a href="{% url 'debts:borrowing_detail' b.pk %}" class="block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 {% if b.is_overdue %}border-red-300{% endif %}">
-        <div class="flex justify-between">
-          <p class="font-medium">{{ b.lender_name }} <span class="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{ b.get_debt_type_display }}</span></p>
-          <p class="font-bold">{{ b.outstanding|money }}</p>
+      {% for g in lenders %}
+      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 min-w-0" data-person="{{ g.name }}">
+        <div class="flex justify-between gap-2">
+          <p class="font-medium min-w-0 break-words">{{ g.name }}{% if g.contact %} <span class="text-xs text-slate-500">{{ g.contact }}</span>{% endif %}</p>
+          <p class="font-bold whitespace-nowrap">{{ g.total|money }}</p>
         </div>
-        <p class="text-xs text-slate-500">{{ b.amount|money }} on {{ b.date_borrowed }}{% if b.due_date %} · due {{ b.due_date }}{% endif %}
-          {% if b.is_overdue %}<span class="text-red-600 font-medium">· OVERDUE</span>{% endif %}</p>
-      </a>
+        {% for p in g.confirmed_pairs %}
+        <div class="mt-2">
+          <a href="{% url 'debts:settle' %}?{{ p.query }}" class="inline-block px-3 py-1 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">Pay</a>
+          <span class="text-xs text-slate-500">{{ p.other.name }}{% if p.other.contact %} ({{ p.other.contact }}){% endif %} also owes you; offset up to {{ p.offsettable|money }}</span>
+        </div>
+        {% endfor %}
+        {% for p in g.pending_pairs %}
+        <p class="mt-2 text-xs">
+          <a href="{% url 'debts:identity' %}?{{ p.query }}" class="text-brand-700 dark:text-brand-400 font-medium" data-testid="confirm-identity">Same person as {{ p.other.name }}{% if p.other.contact %} ({{ p.other.contact }}){% else %} (no contact){% endif %}? Confirm</a>
+          <span class="text-slate-500">to offset {{ p.offsettable|money }}</span>
+        </p>
+        {% endfor %}
+        <details class="mt-2">
+          <summary class="text-xs text-slate-500 cursor-pointer">{{ g.items|length }} transaction{{ g.items|length|pluralize }}</summary>
+          <div class="mt-2 space-y-1">
+            {% for b in g.items %}
+            <a href="{% url 'debts:borrowing_detail' b.pk %}" class="block border-t border-slate-100 dark:border-slate-700/50 pt-2 text-sm">
+              <div class="flex justify-between gap-2">
+                <span class="min-w-0 break-words">{{ b.date_borrowed }} · {{ b.get_debt_type_display }}{% if b.notes %} · {{ b.notes|truncatechars:40 }}{% endif %}</span>
+                <span class="font-medium whitespace-nowrap">{{ b.outstanding_now|money }}</span>
+              </div>
+              <p class="text-xs text-slate-500">Original {{ b.total_owed|money }} · repaid {{ b.total_repaid|money }}{% if b.total_offset %} · offset {{ b.total_offset|money }}{% endif %}{% if b.due_date %} · due {{ b.due_date }}{% endif %}
+                {% if b.is_overdue %}<span class="text-red-600 font-medium">· OVERDUE</span>{% endif %}</p>
+            </a>
+            {% endfor %}
+          </div>
+        </details>
+      </div>
       {% empty %}
       <p class="text-slate-500 text-sm">You have no outstanding debts.</p>
       {% endfor %}
@@ -42,19 +67,93 @@
   <div>
     <h2 class="font-semibold mb-2">Borrowers</h2>
     <div class="space-y-2">
-      {% for l in lendings %}
-      <a href="{% url 'debts:lending_detail' l.pk %}" class="block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 {% if l.is_overdue %}border-red-300{% endif %}">
-        <div class="flex justify-between">
-          <p class="font-medium">{{ l.borrower_name }}</p>
-          <p class="font-bold">{{ l.outstanding|money }}</p>
+      {% for g in borrowers %}
+      <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 min-w-0" data-person="{{ g.name }}">
+        <div class="flex justify-between gap-2">
+          <p class="font-medium min-w-0 break-words">{{ g.name }}{% if g.contact %} <span class="text-xs text-slate-500">{{ g.contact }}</span>{% endif %}</p>
+          <p class="font-bold whitespace-nowrap">{{ g.total|money }}</p>
         </div>
-        <p class="text-xs text-slate-500">Lent {{ l.amount|money }} on {{ l.date_lent }}{% if l.due_date %} · due {{ l.due_date }}{% endif %}
-          {% if l.is_overdue %}<span class="text-red-600 font-medium">· OVERDUE</span>{% endif %}</p>
-      </a>
+        {% for p in g.confirmed_pairs %}
+        <div class="mt-2">
+          <a href="{% url 'debts:settle' %}?{{ p.query }}" class="inline-block px-3 py-1 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">Pay</a>
+          <span class="text-xs text-slate-500">You also owe {{ p.other.name }}{% if p.other.contact %} ({{ p.other.contact }}){% endif %}; offset up to {{ p.offsettable|money }}</span>
+        </div>
+        {% endfor %}
+        {% for p in g.pending_pairs %}
+        <p class="mt-2 text-xs">
+          <a href="{% url 'debts:identity' %}?{{ p.query }}" class="text-brand-700 dark:text-brand-400 font-medium" data-testid="confirm-identity">Same person as {{ p.other.name }}{% if p.other.contact %} ({{ p.other.contact }}){% else %} (no contact){% endif %}? Confirm</a>
+          <span class="text-slate-500">to offset {{ p.offsettable|money }}</span>
+        </p>
+        {% endfor %}
+        <details class="mt-2">
+          <summary class="text-xs text-slate-500 cursor-pointer">{{ g.items|length }} transaction{{ g.items|length|pluralize }}</summary>
+          <div class="mt-2 space-y-1">
+            {% for l in g.items %}
+            <a href="{% url 'debts:lending_detail' l.pk %}" class="block border-t border-slate-100 dark:border-slate-700/50 pt-2 text-sm">
+              <div class="flex justify-between gap-2">
+                <span class="min-w-0 break-words">{{ l.date_lent }}{% if l.notes %} · {{ l.notes|truncatechars:40 }}{% endif %}</span>
+                <span class="font-medium whitespace-nowrap">{{ l.outstanding_now|money }}</span>
+              </div>
+              <p class="text-xs text-slate-500">Lent {{ l.amount|money }} · received {{ l.total_principal_received|money }}{% if l.total_offset %} · offset {{ l.total_offset|money }}{% endif %}{% if l.due_date %} · due {{ l.due_date }}{% endif %}
+                {% if l.is_overdue %}<span class="text-red-600 font-medium">· OVERDUE</span>{% endif %}</p>
+            </a>
+            {% endfor %}
+          </div>
+        </details>
+      </div>
       {% empty %}
       <p class="text-slate-500 text-sm">No one currently owes you money.</p>
       {% endfor %}
     </div>
   </div>
 </div>
+
+{% if settlements or settled_borrowings or settled_lendings %}
+<h2 class="font-semibold mt-8 mb-2">History</h2>
+<div class="space-y-3">
+  {% if settlements %}
+  <details class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4" data-testid="settlement-history">
+    <summary class="text-sm font-medium cursor-pointer">Offsets between debts and loans, and their reversals ({{ settlements|length }})</summary>
+    <div class="mt-3 space-y-2 text-sm">
+      {% for s in settlements %}
+      <div class="border-t border-slate-100 dark:border-slate-700/50 pt-2" data-settlement="{{ s.pk }}">
+        <div class="flex justify-between gap-2">
+          <span class="min-w-0 break-words">{{ s.date }} · {{ s.person_name }}{% if s.reversal %} <span class="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800" data-testid="reversed-badge">Reversed</span>{% endif %}</span>
+          <span class="font-medium whitespace-nowrap {% if s.reversal %}line-through text-slate-400{% endif %}">{{ s.amount|money }}</span>
+        </div>
+        <p class="text-xs text-slate-500">
+          {% for line in s.lines.all %}{{ line.amount|money }} against {% if line.borrowing %}debt of {{ line.borrowing.amount|money }} ({{ line.borrowing.date_borrowed }}){% else %}loan of {{ line.lending.amount|money }} ({{ line.lending.date_lent }}){% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}
+          · no account balance changed{% if s.notes %} · {{ s.notes }}{% endif %}
+        </p>
+        {% if s.reversal %}
+        <div class="mt-1 ml-3 pl-3 border-l-2 border-amber-300 text-xs text-slate-600 dark:text-slate-300" data-testid="reversal-entry">
+          {{ s.reversal.date }} · Reversal of the {{ s.date }} offset of {{ s.amount|money }} with {{ s.person_name }}: both balances restored; no account balance changed{% if s.reversal.notes %} · {{ s.reversal.notes }}{% endif %}
+        </div>
+        {% else %}
+        <a href="{% url 'debts:settlement_undo' s.pk %}" class="inline-block mt-1 text-xs text-red-600 font-medium">Undo</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+  {% if settled_borrowings or settled_lendings %}
+  <details class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+    <summary class="text-sm font-medium cursor-pointer">Fully settled</summary>
+    <div class="mt-3 grid sm:grid-cols-2 gap-4 text-sm">
+      <div>
+        {% for b in settled_borrowings %}
+        <a href="{% url 'debts:borrowing_detail' b.pk %}" class="flex justify-between gap-2 py-1"><span class="min-w-0 break-words">{{ b.lender_name }} · {{ b.date_borrowed }}</span><span class="whitespace-nowrap">{{ b.total_owed|money }}</span></a>
+        {% endfor %}
+      </div>
+      <div>
+        {% for l in settled_lendings %}
+        <a href="{% url 'debts:lending_detail' l.pk %}" class="flex justify-between gap-2 py-1"><span class="min-w-0 break-words">{{ l.borrower_name }} · {{ l.date_lent }}</span><span class="whitespace-nowrap">{{ l.amount|money }}</span></a>
+        {% endfor %}
+      </div>
+    </div>
+  </details>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

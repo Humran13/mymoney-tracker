@@ -6,7 +6,12 @@ from django.db.models import Sum
 from apps.accounts.models import AccountPosting
 from apps.accounts.services import delete_postings, sync_postings
 
-from .models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
+from .models import (
+    Borrowing,
+    BorrowingRepayment,
+    Lending,
+    LendingRepayment,
+)
 
 
 def _borrowing_postings(borrowing: Borrowing) -> list:
@@ -75,6 +80,8 @@ def preview_reclassify_borrowing(borrowing: Borrowing, debt_type, receiving_acco
 
 @db_transaction.atomic
 def delete_borrowing(borrowing: Borrowing):
+    if borrowing.offset_lines.exists():
+        raise ValueError("This debt took part in a settlement, so it is kept as history and cannot be deleted.")
     for repayment in borrowing.repayments.all():
         delete_postings(repayment)
     delete_postings(borrowing)
@@ -89,7 +96,7 @@ def _available_to_repay(borrowing: Borrowing, *, exclude_repayment=None) -> Deci
     repaid = borrowing.repayments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
     if exclude_repayment is not None and exclude_repayment.pk:
         repaid -= exclude_repayment.amount
-    return borrowing.total_owed() - repaid
+    return borrowing.total_owed() - repaid - borrowing.total_offset()
 
 
 def _repayment_postings(repayment: BorrowingRepayment) -> list:
@@ -205,6 +212,8 @@ def create_lending(*, user, **fields) -> Lending:
 
 @db_transaction.atomic
 def delete_lending(lending: Lending):
+    if lending.offset_lines.exists():
+        raise ValueError("This loan took part in a settlement, so it is kept as history and cannot be deleted.")
     for repayment in lending.repayments.all():
         delete_postings(repayment)
     delete_postings(lending)
