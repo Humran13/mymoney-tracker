@@ -200,8 +200,8 @@ class SettleViewTests(TestCase):
     def test_pay_button_only_for_people_on_both_sides(self):
         html = self.client.get(reverse("debts:dashboard")).content.decode()
         self.assertEqual(html.count(">Pay</a>"), 2)  # John under Lenders and under Borrowers
-        self.assertIn("name=John", html)
-        self.assertNotIn("name=Alone", html)
+        self.assertIn("settle/?name=John", html)
+        self.assertNotIn("settle/?name=Alone", html)
 
     def test_proposal_defaults_to_the_maximum_offset(self):
         response = self.client.get(reverse("debts:settle"), {"name": "John"})

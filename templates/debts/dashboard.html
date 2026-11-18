@@ -28,7 +28,8 @@
       {% for g in lenders %}
       <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 min-w-0" data-person="{{ g.name }}">
         <div class="flex justify-between gap-2">
-          <p class="font-medium min-w-0 break-words">{{ g.name }}{% if g.contact %} <span class="text-xs text-slate-500">{{ g.contact }}</span>{% endif %}</p>
+          <p class="font-medium min-w-0 break-words">{{ g.name }}{% if g.contact %} <span class="text-xs text-slate-500">{{ g.contact }}</span>{% endif %}
+            <a href="{% url 'debts:person_rename' 'lender' %}?name={{ g.name|urlencode }}&contact={{ g.contact|urlencode }}" class="inline-flex items-center ml-1 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 text-brand-700 dark:text-brand-400 align-middle" data-testid="edit-person" aria-label="Edit name {{ g.name }}">Edit</a></p>
           <p class="font-bold whitespace-nowrap">{{ g.total|money }}</p>
         </div>
         {% for p in g.confirmed_pairs %}
@@ -70,7 +71,8 @@
       {% for g in borrowers %}
       <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 min-w-0" data-person="{{ g.name }}">
         <div class="flex justify-between gap-2">
-          <p class="font-medium min-w-0 break-words">{{ g.name }}{% if g.contact %} <span class="text-xs text-slate-500">{{ g.contact }}</span>{% endif %}</p>
+          <p class="font-medium min-w-0 break-words">{{ g.name }}{% if g.contact %} <span class="text-xs text-slate-500">{{ g.contact }}</span>{% endif %}
+            <a href="{% url 'debts:person_rename' 'borrower' %}?name={{ g.name|urlencode }}&contact={{ g.contact|urlencode }}" class="inline-flex items-center ml-1 px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 text-brand-700 dark:text-brand-400 align-middle" data-testid="edit-person" aria-label="Edit name {{ g.name }}">Edit</a></p>
           <p class="font-bold whitespace-nowrap">{{ g.total|money }}</p>
         </div>
         {% for p in g.confirmed_pairs %}
