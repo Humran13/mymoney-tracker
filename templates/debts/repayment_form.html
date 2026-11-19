@@ -2,22 +2,36 @@
 {% load money %}
 {% block title %}Edit repayment · {{ APP_NAME }}{% endblock %}
 {% block content %}
-{% include "base/_back_link.html" with back_url_name="debts:borrowing_detail" back_url_arg=borrowing.pk %}
+<a href="{{ back_url }}" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 mb-3">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
+  Back
+</a>
 <h1 class="text-xl font-semibold mb-1">Edit repayment</h1>
 <p class="text-sm text-slate-500 mb-4">
-  {{ borrowing.lender_name }} · {{ borrowing.outstanding|money }} still outstanding
+  {% if is_lender %}{{ parent.lender_name }}{% else %}{{ parent.borrower_name }}{% endif %} · {{ parent.outstanding|money }} still outstanding
 </p>
 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 max-w-lg">
+  {% if confirming %}
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-slate-800" data-testid="edit-confirmation">
+    <p class="font-medium mb-2">Please confirm these changes</p>
+    {% include "debts/_edit_plan.html" %}
+  </div>
   <form method="post" novalidate>
     {% csrf_token %}
-    {% for error in form.non_field_errors %}<p class="mb-3 text-sm text-red-600">{{ error }}</p>{% endfor %}
-    {% include "base/_field.html" with field=form.amount %}
-    {% include "base/_field.html" with field=form.fee_amount %}
-    {% include "base/_field.html" with field=form.date %}
-    {% include "base/_field.html" with field=form.paying_account %}
-    {% include "base/_field.html" with field=form.notes %}
-    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save changes</button>
-    <a href="{% url 'debts:borrowing_detail' borrowing.pk %}" class="ml-3 text-sm text-slate-500">Cancel</a>
+    {% include "debts/_hidden_form.html" %}
+    <input type="hidden" name="confirm" value="1">
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Confirm and save</button>
+    <button type="button" class="ml-2 text-sm text-slate-600 underline" onclick="history.back()">Back to edit</button>
+    <a href="{{ back_url }}" class="ml-2 text-sm text-slate-500">Cancel</a>
   </form>
+  {% else %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% for error in form.non_field_errors %}<p class="mb-3 text-sm text-red-600" role="alert">{{ error }}</p>{% endfor %}
+    {% for field in form.visible_fields %}{% include "base/_field.html" with field=field %}{% endfor %}
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save changes</button>
+    <a href="{{ back_url }}" class="ml-3 text-sm text-slate-500">Cancel</a>
+  </form>
+  {% endif %}
 </div>
 {% endblock %}

@@ -68,7 +68,7 @@ def test_edit_and_record_payment_do_not_trigger_card_navigation(signed_in_page, 
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(f"{live_server.url}/debts/")
     _card(page, "DAKA").locator('[data-testid="edit-person"]').click()
-    page.wait_for_url("**/people/borrower/rename/**")
+    page.wait_for_url("**/people/borrower/edit/**")
     page.goto(f"{live_server.url}/debts/")
     _card(page, "DAKA").locator('[data-testid="record-payment"]').click()
     page.wait_for_url("**/people/borrower/pay/**")

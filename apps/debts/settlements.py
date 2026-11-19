@@ -452,6 +452,18 @@ def _identity_exists(user, side, name, contact) -> bool:
     return any(person_key(getattr(r, name_attr), r.contact) == key for r in model.objects.filter(user=user))
 
 
+def drop_stale_links(user, side, old_name, old_contact) -> int:
+    """Remove identity links that referred to an identity nothing on `side`
+    uses any more, so a stale confirmation can never match somebody new."""
+    if _identity_exists(user, side, old_name, old_contact):
+        return 0
+    old_name_key, old_contact_key = norm(old_name), norm(old_contact)
+    stale = PersonIdentityLink.objects.filter(user=user, name_key=old_name_key).filter(
+        contact_a=old_contact_key
+    ) | PersonIdentityLink.objects.filter(user=user, name_key=old_name_key, contact_b=old_contact_key)
+    return stale.delete()[0]
+
+
 @db_transaction.atomic
 def rename_person(*, user, side, name, contact="", new_name, new_contact="", pk=None, expected_count=None) -> dict:
     """Change the name/contact on one person's records (or one record when `pk`
@@ -492,12 +504,7 @@ def rename_person(*, user, side, name, contact="", new_name, new_contact="", pk=
 
     links_removed = 0
     if changed and person_key(old_name, old_contact) != person_key(new_name, new_contact):
-        if not _identity_exists(user, side, old_name, old_contact):
-            old_name_key, old_contact_key = norm(old_name), norm(old_contact)
-            stale = PersonIdentityLink.objects.filter(user=user, name_key=old_name_key).filter(
-                contact_a=old_contact_key
-            ) | PersonIdentityLink.objects.filter(user=user, name_key=old_name_key, contact_b=old_contact_key)
-            links_removed = stale.delete()[0]
+        links_removed = drop_stale_links(user, side, old_name, old_contact)
     return {
         "side": side,
         "count": len(records),

@@ -1,0 +1,21 @@
+{% load money %}
+{# Shared confirmation summary for a transaction or payment edit. `plan` comes from apps/debts/editing.py. #}
+<ul class="space-y-1 mb-3" data-testid="edit-changes">
+  {% for item in plan.diff %}
+  <li class="flex flex-wrap gap-x-2"><span class="text-slate-600">{{ item.label }}:</span><span class="line-through text-slate-500 break-all">{{ item.before }}</span><span aria-hidden="true">&rarr;</span><strong class="break-all">{{ item.after }}</strong></li>
+  {% endfor %}
+</ul>
+<p class="mb-2" data-testid="edit-outstanding">Still outstanding on this transaction: {{ plan.outstanding_before|money }} &rarr; <strong>{{ plan.outstanding_after|money }}</strong></p>
+{% if plan.balance_changes %}
+<div class="mb-2" data-testid="edit-balance-changes">
+  <p class="font-medium">Account balances will change:</p>
+  <ul class="mt-1 space-y-0.5">
+    {% for row in plan.balance_changes %}
+    <li class="flex flex-wrap justify-between gap-x-2"><span class="min-w-0 break-words">{{ row.account.name }}</span><span class="min-w-0 break-words">{{ row.before|money }} &rarr; <strong>{{ row.after|money }}</strong> ({% if row.change > 0 %}+{% endif %}{{ row.change|money }})</span></li>
+    {% endfor %}
+  </ul>
+</div>
+{% else %}
+<p class="mb-2 text-slate-600" data-testid="edit-no-balance-change">No account balance changes.</p>
+{% endif %}
+{% for note in plan.warnings %}<p class="mb-1 text-xs text-slate-600" data-testid="edit-warning">{{ note }}</p>{% endfor %}

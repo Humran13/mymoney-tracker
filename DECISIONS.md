@@ -243,3 +243,13 @@ Newest at top isn't required here — this is organized by topic instead.
 - Identity links for the old name/contact are deleted once nothing on that side uses that identity any more, so renaming back can't resurrect an old confirmation. Links are kept while the identity is still in use.
 - Settlement `person_name` is history and is not rewritten; undo works from settlement lines, so it is unaffected by renames.
 - Each rename writes an `AuditEvent` (old/new name and contact, record ids, links removed).
+
+## Editing debt transactions and payments
+
+- The dashboard Edit button opens `people/<side>/edit/`: one transaction goes straight to its edit form, several are listed (with payment history, per-payment Edit and Add Another Transaction). Renaming everyone at once stays available as "Edit name" (`person_rename`).
+- Edits live in `apps/debts/editing.py`. A shared `plan_*` validator (read-only: diff, per-account balance impact, outstanding before/after) feeds the confirmation preview, then `apply_*` re-runs it under `select_for_update` and replays the normal posting builders through `sync_postings`. Nothing adjusts a balance in place; a failure rolls the whole edit back.
+- Balance impact is computed against each account's starting date (`balance_start_date`), so a transaction moved before an account's start is kept as history and does not change today's cash. Noncash types never produce postings.
+- Guards: amount/interest cannot drop below what is already repaid or offset; a date cannot move after the earliest payment/offset, and a payment cannot be dated before its debt; a transaction with an active offset cannot be moved to a different person (undo the settlement first); a payment can never exceed what is outstanding. Same-name-different-case edits keep the stored contact; anything else goes through remembered-name resolution and is flagged on the confirmation when it merges into an existing person.
+- A stale `version` (the record's `updated_at`) is refused, so two open tabs cannot overwrite each other.
+- Add Another Transaction uses disabled name/identity fields, so the server ignores any tampered name; the new record reuses the person's stored contact.
+- Lending repayments are now editable (`update_lending_repayment`); the borrowing repayment edit goes through the same preview. Services always re-read the stored repayment because a ModelForm instance already holds the new values.

@@ -1,8 +1,11 @@
 {% extends "base/base.html" %}
 {% block title %}Lend money · {{ APP_NAME }}{% endblock %}
 {% block content %}
-{% include "base/_back_link.html" with back_url_name="debts:dashboard" guard_unsaved=True %}
-<h1 class="text-xl font-semibold mb-4">Lend money to someone</h1>
+{% if person_name %}<a href="{{ back_url }}" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 mb-3">&larr; Back</a>
+<h1 class="text-xl font-semibold mb-1">Add another transaction</h1>
+<p class="text-sm text-slate-500 mb-4" data-testid="add-for">For <strong>{{ person_name }}</strong>. Their name and identity are reused automatically.</p>
+{% else %}{% include "base/_back_link.html" with back_url_name="debts:dashboard" guard_unsaved=True %}
+<h1 class="text-xl font-semibold mb-4">Lend money to someone</h1>{% endif %}
 <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
   <form method="post" novalidate>
     {% csrf_token %}
@@ -33,5 +36,5 @@
   debtTypeField.addEventListener('change', toggleSourceAccount);
   toggleSourceAccount();
 </script>
-{% include "base/_name_autocomplete.html" with url_name="debts:name_suggest" %}
+{% if not person_name %}{% include "base/_name_autocomplete.html" with url_name="debts:name_suggest" %}{% endif %}
 {% endblock %}
