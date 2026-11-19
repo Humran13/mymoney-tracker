@@ -39,7 +39,7 @@ def test_pay_button_offsets_with_confirmation_and_keeps_history(signed_in_page, 
     page.locator('[data-person="John"]').first.locator("summary").click()
     assert "transport" in page.content() and "school fees" in page.content()
 
-    page.get_by_role("link", name="Pay").first.click()
+    page.get_by_role("link", name="Pay", exact=True).first.click()
     page.wait_for_load_state()
     assert "300,000" in page.content()
     submit_and_wait(page)  # Review offset

@@ -33,7 +33,7 @@ def test_rename_then_pay(signed_in_page, live_server, width):
     balance = account_balance(account)
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(f"{live_server.url}/debts/")
-    assert page.get_by_role("link", name="Pay").count() == 0
+    assert page.get_by_role("link", name="Pay", exact=True).count() == 0
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
     page.locator('[data-person="Dakka"] [data-testid="edit-person"]').click()
@@ -45,7 +45,7 @@ def test_rename_then_pay(signed_in_page, live_server, width):
     page.wait_for_url("**/debts/")
 
     assert page.locator('[data-person="DAKA"]').count() == 2
-    page.get_by_role("link", name="Pay").first.click()
+    page.get_by_role("link", name="Pay", exact=True).first.click()
     page.wait_for_load_state()
     assert "20,000" in page.content()
     submit_and_wait(page)
