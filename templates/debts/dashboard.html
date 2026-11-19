@@ -95,7 +95,7 @@
             {% for l in g.items %}
             <a href="{% url 'debts:lending_detail' l.pk %}" class="block border-t border-slate-100 dark:border-slate-700/50 pt-2 text-sm">
               <div class="flex justify-between gap-2">
-                <span class="min-w-0 break-words">{{ l.date_lent }}{% if l.notes %} · {{ l.notes|truncatechars:40 }}{% endif %}</span>
+                <span class="min-w-0 break-words">{{ l.date_lent }} · {{ l.get_debt_type_display }}{% if l.notes %} · {{ l.notes|truncatechars:40 }}{% endif %}</span>
                 <span class="font-medium whitespace-nowrap">{{ l.outstanding_now|money }}</span>
               </div>
               <p class="text-xs text-slate-500">Lent {{ l.amount|money }} · received {{ l.total_principal_received|money }}{% if l.total_offset %} · offset {{ l.total_offset|money }}{% endif %}{% if l.due_date %} · due {{ l.due_date }}{% endif %}

@@ -14,7 +14,7 @@ from apps.debts.models import Borrowing, DebtSettlement, DebtSettlementLine, Len
 from .test_debt_offsets_grouping_bill_fees import TODAY, D, lend, make_user, make_wallet, owe, settle
 
 BEFORE = [("debts", "0005_debt_settlements_and_contact")]
-LATEST = [("debts", "0006_settlement_reversals_and_identity_links")]
+LATEST = [("debts", "0007_lending_debt_type")]
 
 
 class SettlementReversalMigrationTests(TransactionTestCase):

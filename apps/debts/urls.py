@@ -24,5 +24,6 @@ urlpatterns = [
     path("repayments/<int:pk>/delete/", views.repayment_delete, name="repayment_delete"),
     path("lendings/new/", views.lending_create, name="lending_create"),
     path("lendings/<int:pk>/", views.lending_detail, name="lending_detail"),
+    path("lendings/<int:pk>/reclassify/", views.lending_reclassify, name="lending_reclassify"),
     path("lendings/<int:pk>/delete/", views.lending_delete, name="lending_delete"),
 ]

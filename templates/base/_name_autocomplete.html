@@ -89,6 +89,11 @@ clears it, and typing a brand-new name is always allowed (nothing is forced).
     else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); choose(active); } }
     else if (e.key === 'Escape') { e.preventDefault(); close(); }
   });
+  input.form.addEventListener('submit', function () {  // never leave a suggestion lookup in flight while saving
+    clearTimeout(timer);
+    if (controller) controller.abort();
+    close();
+  });
   input.addEventListener('blur', function () { setTimeout(close, 120); });
 })();
 </script>

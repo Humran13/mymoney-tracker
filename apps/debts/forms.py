@@ -140,7 +140,7 @@ class BorrowingRepaymentForm(forms.ModelForm):
 class LendingForm(PersonNameMixin, forms.ModelForm):
     class Meta:
         model = Lending
-        fields = ["borrower_name", "amount", "date_lent", "source_account", "due_date", "interest_amount", "notes"]
+        fields = ["debt_type", "borrower_name", "amount", "date_lent", "source_account", "due_date", "interest_amount", "notes"]
         widgets = {
             "date_lent": forms.DateInput(attrs={"type": "date"}),
             "due_date": forms.DateInput(attrs={"type": "date"}),
@@ -153,9 +153,15 @@ class LendingForm(PersonNameMixin, forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._init_person(user)
+        self.fields["source_account"].required = False
+        # Omitting the type keeps the historical behaviour: a cash loan.
+        self.fields["debt_type"].required = False
         self.fields["source_account"].queryset = FinancialAccount.objects.filter(
             user=user, status=FinancialAccount.Status.ACTIVE
         )
+
+    def clean_debt_type(self):
+        return self.cleaned_data.get("debt_type") or Lending.DebtType.CASH_LOAN
 
     def clean_amount(self):
         value = self.cleaned_data["amount"]
@@ -165,7 +171,29 @@ class LendingForm(PersonNameMixin, forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        if cleaned.get("debt_type") == Lending.DebtType.CASH_LOAN:
+            if not cleaned.get("source_account"):
+                self.add_error("source_account", "A cash loan requires the account the money was sent from.")
+        else:
+            cleaned["source_account"] = None
         self._resolve_person(cleaned)
+        return cleaned
+
+
+class LendingReclassifyForm(forms.Form):
+    debt_type = forms.ChoiceField(choices=Lending.DebtType.choices)
+    source_account = forms.ModelChoiceField(queryset=FinancialAccount.objects.none(), required=False)
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["source_account"].queryset = FinancialAccount.objects.filter(
+            user=user, status=FinancialAccount.Status.ACTIVE
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("debt_type") == Lending.DebtType.CASH_LOAN and not cleaned.get("source_account"):
+            self.add_error("source_account", "A cash loan requires the account the money was sent from.")
         return cleaned
 
 

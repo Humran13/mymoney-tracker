@@ -191,23 +191,56 @@ def _refresh_borrowing_status(borrowing: Borrowing):
     borrowing.save(update_fields=["status"])
 
 
+def _lending_postings(lending: Lending) -> list:
+    """Only a CASH_LOAN ever creates a real cash-out posting. Noncash
+    receivables raise what is owed (via outstanding(), which reads the model
+    fields) without touching any account."""
+    if lending.debt_type != Lending.DebtType.CASH_LOAN:
+        return []
+    return [
+        dict(
+            account=lending.source_account,
+            amount=-lending.amount,
+            source_type=AccountPosting.SourceType.LEND_SEND,
+            occurred_on=lending.date_lent,
+            description=f"Lent to {lending.borrower_name}",
+        )
+    ]
+
+
 @db_transaction.atomic
 def create_lending(*, user, **fields) -> Lending:
+    if fields.get("debt_type", Lending.DebtType.CASH_LOAN) != Lending.DebtType.CASH_LOAN:
+        fields["source_account"] = None
+    elif not fields.get("source_account"):
+        raise ValueError("A cash loan requires the account the money was sent from.")
     lending = Lending.objects.create(user=user, **fields)
-    sync_postings(
-        lending,
-        [
-            dict(
-                account=lending.source_account,
-                amount=-lending.amount,
-                source_type=AccountPosting.SourceType.LEND_SEND,
-                occurred_on=lending.date_lent,
-                description=f"Lent to {lending.borrower_name}",
-            )
-        ],
-        user=user,
-    )
+    sync_postings(lending, _lending_postings(lending), user=user)
     return lending
+
+
+@db_transaction.atomic
+def reclassify_lending(*, lending: Lending, debt_type, source_account=None) -> Lending:
+    """Change a receivable's type. Preserves the record, borrower, amount,
+    dates and every repayment/offset — only the LEND_SEND posting is
+    added/removed through sync_postings."""
+    lending.debt_type = debt_type
+    lending.source_account = source_account if debt_type == Lending.DebtType.CASH_LOAN else None
+    lending.full_clean()
+    lending.save(update_fields=["debt_type", "source_account"])
+    sync_postings(lending, _lending_postings(lending), user=lending.user)
+    return lending
+
+
+def preview_reclassify_lending(lending: Lending, debt_type, source_account=None) -> dict:
+    """Read-only preview of the account balance changes reclassify_lending()
+    would cause."""
+    changes = {}
+    if lending.debt_type == Lending.DebtType.CASH_LOAN and lending.source_account_id:
+        changes[lending.source_account] = changes.get(lending.source_account, Decimal("0.00")) + lending.amount
+    if debt_type == Lending.DebtType.CASH_LOAN and source_account is not None:
+        changes[source_account] = changes.get(source_account, Decimal("0.00")) - lending.amount
+    return changes
 
 
 @db_transaction.atomic
