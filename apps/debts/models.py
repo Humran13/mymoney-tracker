@@ -121,13 +121,28 @@ class BorrowingRepayment(UserOwnedModel):
 
 
 class Lending(UserOwnedModel):
-    """Money the user lent to someone else. Sending it reduces a real
-    account balance but is never counted as an ordinary expense."""
+    """Money (or value) owed to the user by someone else. Only a CASH_LOAN
+    reduces a real account balance (and is never counted as an ordinary
+    expense) — goods/services provided on credit and other receivables
+    record what is owed without ever touching cash, so they must never get
+    a LEND_SEND posting."""
+
+    class DebtType(models.TextChoices):
+        CASH_LOAN = "cash_loan", "Cash Loan"
+        GOODS_CREDIT = "goods_credit", "Goods on Credit"
+        SERVICES_CREDIT = "services_credit", "Services on Credit"
+        OTHER = "other", "Other Money Owed"
 
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
         SETTLED = "settled", "Settled"
 
+    debt_type = models.CharField(
+        max_length=20,
+        choices=DebtType.choices,
+        default=DebtType.CASH_LOAN,
+        help_text="Cash Loan is the only type that actually takes money out of an account.",
+    )
     borrower_name = models.CharField(max_length=150)
     contact = models.CharField(
         max_length=60,
@@ -136,7 +151,14 @@ class Lending(UserOwnedModel):
     )
     amount = money_field()
     date_lent = models.DateField()
-    source_account = models.ForeignKey("accounts.FinancialAccount", on_delete=models.PROTECT, related_name="lendings")
+    source_account = models.ForeignKey(
+        "accounts.FinancialAccount",
+        on_delete=models.PROTECT,
+        related_name="lendings",
+        null=True,
+        blank=True,
+        help_text="Required for a Cash Loan only — the account the money was sent from.",
+    )
     due_date = models.DateField(null=True, blank=True)
     interest_amount = money_field(default=0, help_text="Total interest expected in addition to the principal, if any.")
     notes = models.TextField(blank=True)

@@ -327,7 +327,7 @@ def day_detail(user, day) -> dict:
     lendings_sent = [
         lend
         for lend in Lending.objects.filter(user=user, date_lent=day).select_related("source_account")
-        if _in_window(lend.source_account, day)
+        if lend.debt_type == Lending.DebtType.CASH_LOAN and _in_window(lend.source_account, day)
     ]
     lending_repayments = [
         r

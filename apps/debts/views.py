@@ -14,7 +14,7 @@ from apps.core.audit import log_audit_event
 from . import services, settlements
 from .forms import (
     BorrowingForm,
-    BorrowingReclassifyForm,
+    BorrowingReclassifyForm, LendingReclassifyForm,
     BorrowingRepaymentForm,
     LendingForm,
     LendingRepaymentForm,
@@ -415,6 +415,33 @@ def lending_detail(request, pk):
     else:
         form = LendingRepaymentForm(user=request.user, lending=lending, initial={"date": timezone.localdate()})
     return render(request, "debts/lending_detail.html", {"lending": lending, "form": form})
+
+
+@login_required
+def lending_reclassify(request, pk):
+    lending = get_object_or_404(Lending, pk=pk, user=request.user)
+    if request.method == "POST":
+        form = LendingReclassifyForm(request.POST, user=request.user)
+        if form.is_valid():
+            debt_type = form.cleaned_data["debt_type"]
+            source_account = form.cleaned_data.get("source_account")
+            if request.POST.get("confirm") == "1":
+                services.reclassify_lending(lending=lending, debt_type=debt_type, source_account=source_account)
+                log_audit_event(request.user, "update", obj=lending, description="Reclassified debt type")
+                messages.success(request, "Debt type updated.")
+                return redirect("debts:lending_detail", pk=pk)
+            preview = services.preview_reclassify_lending(lending, debt_type, source_account)
+            return render(
+                request,
+                "debts/lending_reclassify.html",
+                {"lending": lending, "form": form, "preview": preview, "confirming": True},
+            )
+    else:
+        form = LendingReclassifyForm(
+            user=request.user,
+            initial={"debt_type": lending.debt_type, "source_account": lending.source_account},
+        )
+    return render(request, "debts/lending_reclassify.html", {"lending": lending, "form": form, "confirming": False})
 
 
 @login_required

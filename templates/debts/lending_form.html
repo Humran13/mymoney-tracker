@@ -6,15 +6,31 @@
 <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
   <form method="post" novalidate>
     {% csrf_token %}
+    {% include "base/_field.html" with field=form.debt_type %}
+    <p id="noncashNotice" class="text-xs text-slate-500 mb-3 hidden">Recording goods or services on credit increases what you are owed but does not reduce your available cash. Only repayments you receive add cash.</p>
     {% include "base/_field.html" with field=form.borrower_name %}
     {% include "base/_field.html" with field=form.contact %}
     {% include "base/_field.html" with field=form.amount %}
     {% include "base/_field.html" with field=form.date_lent %}
-    {% include "base/_field.html" with field=form.source_account %}
+    <div id="sourceAccountField">
+      {% include "base/_field.html" with field=form.source_account %}
+    </div>
     {% include "base/_field.html" with field=form.due_date %}
     {% include "base/_field.html" with field=form.interest_amount %}
     {% include "base/_field.html" with field=form.notes %}
     <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save</button>
   </form>
 </div>
+<script>
+  const debtTypeField = document.getElementById('{{ form.debt_type.id_for_label }}');
+  const sourceAccountField = document.getElementById('sourceAccountField');
+  const noncashNotice = document.getElementById('noncashNotice');
+  function toggleSourceAccount() {
+    const isCash = debtTypeField.value === 'cash_loan';
+    sourceAccountField.classList.toggle('hidden', !isCash);
+    noncashNotice.classList.toggle('hidden', isCash);
+  }
+  debtTypeField.addEventListener('change', toggleSourceAccount);
+  toggleSourceAccount();
+</script>
 {% endblock %}
