@@ -1,5 +1,4 @@
 import datetime
-import uuid
 from decimal import Decimal
 
 import pytest
