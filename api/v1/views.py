@@ -8,11 +8,28 @@ from apps.bills.models import BillPayment, RecurringBill
 from apps.budgets.models import Budget
 from apps.closing.models import DailyClosing
 from apps.core.api_mixins import UserOwnedQuerysetMixin
+from apps.debts import services as debt_services
 from apps.debts.models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
 from apps.goals.models import GoalAllocation, SavingsGoal
 from apps.transactions.models import Category, Transaction, TransactionTemplate
 
 from . import serializers
+
+
+class SafeDebtDeleteMixin:
+    """DELETE goes through the debt services so postings are removed together
+    with the record. Refusals (e.g. a debt that took part in a settlement)
+    become a 400 instead of silently orphaning ledger rows."""
+
+    delete_service = None
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import ValidationError
+
+        try:
+            type(self).delete_service(instance)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
 
 class ProfileSettingsView(generics.RetrieveUpdateAPIView):
@@ -69,25 +86,29 @@ class TransactionTemplateViewSet(UserOwnedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = serializers.TransactionTemplateSerializer
 
 
-class BorrowingViewSet(UserOwnedQuerysetMixin, viewsets.ModelViewSet):
+class BorrowingViewSet(SafeDebtDeleteMixin, UserOwnedQuerysetMixin, viewsets.ModelViewSet):
+    delete_service = staticmethod(debt_services.delete_borrowing)
     queryset = Borrowing.objects.all()
     serializer_class = serializers.BorrowingSerializer
     filterset_fields = ["status"]
 
 
-class BorrowingRepaymentViewSet(UserOwnedQuerysetMixin, viewsets.ModelViewSet):
+class BorrowingRepaymentViewSet(SafeDebtDeleteMixin, UserOwnedQuerysetMixin, viewsets.ModelViewSet):
+    delete_service = staticmethod(debt_services.delete_borrowing_repayment)
     queryset = BorrowingRepayment.objects.all()
     serializer_class = serializers.BorrowingRepaymentSerializer
     filterset_fields = ["borrowing"]
 
 
-class LendingViewSet(UserOwnedQuerysetMixin, viewsets.ModelViewSet):
+class LendingViewSet(SafeDebtDeleteMixin, UserOwnedQuerysetMixin, viewsets.ModelViewSet):
+    delete_service = staticmethod(debt_services.delete_lending)
     queryset = Lending.objects.all()
     serializer_class = serializers.LendingSerializer
     filterset_fields = ["status"]
 
 
-class LendingRepaymentViewSet(UserOwnedQuerysetMixin, viewsets.ModelViewSet):
+class LendingRepaymentViewSet(SafeDebtDeleteMixin, UserOwnedQuerysetMixin, viewsets.ModelViewSet):
+    delete_service = staticmethod(debt_services.delete_lending_repayment)
     queryset = LendingRepayment.objects.all()
     serializer_class = serializers.LendingRepaymentSerializer
     filterset_fields = ["lending"]

@@ -155,6 +155,58 @@ class TransactionTemplateSerializer(ScopedFieldsMixin, serializers.ModelSerializ
         return super().create(validated_data)
 
 
+def _debt_edit(serializer, instance, side, validated_data):
+    """Route a PUT/PATCH on a debt through the same validated, locked, ledger-syncing
+    edit service the web editor uses. Anything unsafe becomes a 400, never a silent write."""
+    from apps.core.audit import log_audit_event
+    from apps.debts import editing
+
+    user = serializer.context["request"].user
+    try:
+        plan = editing.apply_edit(user=user, side=side, pk=instance.pk, changes=dict(validated_data))
+    except editing.EditError as exc:
+        raise serializers.ValidationError(str(exc)) from exc
+    if plan["diff"]:
+        log_audit_event(user, "update", affected_user=user, obj=instance, description="Edited debt via API",
+                        metadata=editing.audit_metadata(plan, side=side))
+    instance.refresh_from_db()
+    return instance
+
+
+def _payment_edit(serializer, instance, side, parent_field, validated_data):
+    from apps.core.audit import log_audit_event
+    from apps.debts import editing
+
+    data = dict(validated_data)
+    parent = data.pop(parent_field, None)
+    if parent is not None and parent.pk != getattr(instance, parent_field).pk:
+        raise serializers.ValidationError({parent_field: "A payment cannot be moved to a different debt."})
+    user = serializer.context["request"].user
+    try:
+        plan = editing.apply_payment_edit(user=user, side=side, pk=instance.pk, changes=data)
+    except editing.EditError as exc:
+        raise serializers.ValidationError(str(exc)) from exc
+    if plan["diff"]:
+        log_audit_event(user, "update", affected_user=user, obj=instance, description="Edited debt payment via API",
+                        metadata=editing.audit_metadata(plan, side=side))
+    instance.refresh_from_db()
+    return instance
+
+
+def _cash_validation(serializer, attrs, model, account_field, message):
+    """Cash loans need an account; other types never have one. On a partial
+    update the stored values fill in whatever the request omitted."""
+    instance = serializer.instance
+    debt_type = attrs.get("debt_type", instance.debt_type if instance else model.DebtType.CASH_LOAN)
+    account = attrs.get(account_field, getattr(instance, account_field, None) if instance else None)
+    if debt_type == model.DebtType.CASH_LOAN:
+        if not account:
+            raise serializers.ValidationError({account_field: message})
+    else:
+        attrs[account_field] = None
+    return attrs
+
+
 class BorrowingSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
     scoped_fields = {"receiving_account": _user_accounts}
     outstanding = serializers.SerializerMethodField()
@@ -171,14 +223,12 @@ class BorrowingSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
         return obj.outstanding()
 
     def validate(self, attrs):
-        debt_type = attrs.get("debt_type", Borrowing.DebtType.CASH_LOAN)
-        if debt_type == Borrowing.DebtType.CASH_LOAN and not attrs.get("receiving_account"):
-            raise serializers.ValidationError(
-                {"receiving_account": "A cash loan requires the account that received the money."}
-            )
-        if debt_type != Borrowing.DebtType.CASH_LOAN:
-            attrs["receiving_account"] = None
-        return attrs
+        return _cash_validation(
+            self, attrs, Borrowing, "receiving_account", "A cash loan requires the account that received the money."
+        )
+
+    def update(self, instance, validated_data):
+        return _debt_edit(self, instance, "lender", validated_data)
 
     def create(self, validated_data):
         from apps.debts.services import create_borrowing
@@ -207,6 +257,9 @@ class BorrowingRepaymentSerializer(ScopedFieldsMixin, serializers.ModelSerialize
         except ValueError as exc:
             raise serializers.ValidationError(str(exc)) from exc
 
+    def update(self, instance, validated_data):
+        return _payment_edit(self, instance, "lender", "borrowing", validated_data)
+
 
 class LendingSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
     scoped_fields = {"source_account": _user_accounts}
@@ -225,14 +278,12 @@ class LendingSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
         return obj.outstanding()
 
     def validate(self, attrs):
-        debt_type = attrs.get("debt_type", Lending.DebtType.CASH_LOAN)
-        if debt_type == Lending.DebtType.CASH_LOAN and not attrs.get("source_account"):
-            raise serializers.ValidationError(
-                {"source_account": "A cash loan requires the account the money was sent from."}
-            )
-        if debt_type != Lending.DebtType.CASH_LOAN:
-            attrs["source_account"] = None
-        return attrs
+        return _cash_validation(
+            self, attrs, Lending, "source_account", "A cash loan requires the account the money was sent from."
+        )
+
+    def update(self, instance, validated_data):
+        return _debt_edit(self, instance, "borrower", validated_data)
 
     def create(self, validated_data):
         from apps.debts.services import create_lending
@@ -260,6 +311,9 @@ class LendingRepaymentSerializer(ScopedFieldsMixin, serializers.ModelSerializer)
             return record_lending_repayment(lending=lending, **validated_data)
         except ValueError as exc:
             raise serializers.ValidationError(str(exc)) from exc
+
+    def update(self, instance, validated_data):
+        return _payment_edit(self, instance, "borrower", "lending", validated_data)
 
 
 class RecurringBillSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
