@@ -331,10 +331,15 @@ class RepaymentFeeWebAndApiTests(TestCase):
             user=self.user, borrowing=self.borrowing, amount=Decimal("100000.00"),
             fee_amount=Decimal("1500.00"), date=DAY, paying_account=self.wallet,
         )
-        response = self.client.post(
-            reverse("debts:repayment_update", args=[repayment.pk]),
-            self._payload(amount="150000.00", fee_amount="2000.00"),
-        )
+        url = reverse("debts:repayment_update", args=[repayment.pk])
+        # A balance-changing edit is previewed first; nothing is written yet.
+        preview = self.client.post(url, self._payload(amount="150000.00", fee_amount="2000.00"))
+        self.assertEqual(preview.status_code, 200)
+        self.assertContains(preview, "Please confirm these changes")
+        repayment.refresh_from_db()
+        self.assertEqual(repayment.amount, Decimal("100000.00"))
+        self.assertEqual(account_balance(self.wallet), Decimal("398500.00"))
+        response = self.client.post(url, {**self._payload(amount="150000.00", fee_amount="2000.00"), "confirm": "1"})
         self.assertEqual(response.status_code, 302)
         repayment.refresh_from_db()
         self.assertEqual(repayment.amount, Decimal("150000.00"))

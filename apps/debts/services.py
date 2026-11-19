@@ -253,14 +253,10 @@ def delete_lending(lending: Lending):
     lending.delete()
 
 
-@db_transaction.atomic
-def record_lending_repayment(*, user, lending: Lending, **fields) -> LendingRepayment:
-    principal = fields.get("principal_amount") or 0
-    if principal and principal > lending.outstanding():
-        raise ValueError(
-            f"Principal repayment of {principal} exceeds the {lending.outstanding()} still owed."
-        )
-    repayment = LendingRepayment.objects.create(user=user, lending=lending, **fields)
+def _lending_repayment_postings(repayment: LendingRepayment) -> list:
+    """Principal and interest are separate postings: principal reduces what is
+    owed, interest is income and never touches the principal balance."""
+    lending = repayment.lending
     specs = []
     if repayment.principal_amount:
         specs.append(
@@ -282,7 +278,45 @@ def record_lending_repayment(*, user, lending: Lending, **fields) -> LendingRepa
                 description=f"Interest from {lending.borrower_name}",
             )
         )
+    return specs
+
+
+@db_transaction.atomic
+def record_lending_repayment(*, user, lending: Lending, **fields) -> LendingRepayment:
+    principal = fields.get("principal_amount") or 0
+    if principal and principal > lending.outstanding():
+        raise ValueError(
+            f"Principal repayment of {principal} exceeds the {lending.outstanding()} still owed."
+        )
+    repayment = LendingRepayment.objects.create(user=user, lending=lending, **fields)
+    specs = _lending_repayment_postings(repayment)
     sync_postings(repayment, specs, user=user)
+    _refresh_lending_status(lending)
+    return repayment
+
+
+@db_transaction.atomic
+def update_lending_repayment(repayment: LendingRepayment, **fields) -> LendingRepayment:
+    """Edit a received repayment. `repayment` must be a fresh DB copy (not a
+    form instance that already holds the new values), because its stored
+    principal is added back before checking the new figure. Postings are fully
+    replaced through sync_postings, so nothing can be doubled or orphaned."""
+    lending = Lending.objects.select_for_update().get(pk=repayment.lending_id)
+    principal = fields.get("principal_amount", repayment.principal_amount) or Decimal("0.00")
+    interest = fields.get("interest_amount", repayment.interest_amount) or Decimal("0.00")
+    if principal < 0 or interest < 0:
+        raise ValueError("Amounts cannot be negative.")
+    if principal <= 0 and interest <= 0:
+        raise ValueError("Enter a principal and/or interest amount received.")
+    available = lending.outstanding() + repayment.principal_amount
+    if principal > available:
+        raise ValueError(f"Principal of {principal} exceeds the {available} still owed on this loan.")
+    for key, value in fields.items():
+        setattr(repayment, key, value)
+    repayment.principal_amount, repayment.interest_amount = principal, interest
+    repayment.full_clean(exclude=["user"])
+    repayment.save()
+    sync_postings(repayment, _lending_repayment_postings(repayment), user=repayment.user)
     _refresh_lending_status(lending)
     return repayment
 

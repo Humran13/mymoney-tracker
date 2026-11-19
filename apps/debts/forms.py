@@ -1,11 +1,23 @@
 from decimal import Decimal
 
 from django import forms
+from django.db.models import Q
 
 from apps.accounts.models import FinancialAccount
 
 from . import people
 from .models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
+from .settlements import clean_name, norm
+
+
+def _selectable_accounts(user, instance, current_attr):
+    """Active accounts, plus the account an existing record already uses (so
+    editing never fails just because that account was archived since)."""
+    current = getattr(instance, current_attr, None) if instance is not None else None
+    query = Q(user=user, status=FinancialAccount.Status.ACTIVE)
+    if current:
+        query |= Q(user=user, pk=current)
+    return FinancialAccount.objects.filter(query)
 
 
 class PersonNameMixin:
@@ -102,9 +114,7 @@ class BorrowingRepaymentForm(forms.ModelForm):
     def __init__(self, *args, user=None, borrowing=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.borrowing = borrowing
-        self.fields["paying_account"].queryset = FinancialAccount.objects.filter(
-            user=user, status=FinancialAccount.Status.ACTIVE
-        )
+        self.fields["paying_account"].queryset = _selectable_accounts(user, self.instance, "paying_account_id")
         # Zero unless the payment channel actually charged something — a fee
         # must never be required, and must never be silently invented.
         self.fields["fee_amount"].required = False
@@ -206,9 +216,7 @@ class LendingRepaymentForm(forms.ModelForm):
     def __init__(self, *args, user=None, lending=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.lending = lending
-        self.fields["receiving_account"].queryset = FinancialAccount.objects.filter(
-            user=user, status=FinancialAccount.Status.ACTIVE
-        )
+        self.fields["receiving_account"].queryset = _selectable_accounts(user, self.instance, "receiving_account_id")
 
     def clean(self):
         cleaned = super().clean()
@@ -216,11 +224,71 @@ class LendingRepaymentForm(forms.ModelForm):
         interest = cleaned.get("interest_amount") or 0
         if principal <= 0 and interest <= 0:
             raise forms.ValidationError("Enter a principal and/or interest amount received.")
-        if self.lending is not None and principal > self.lending.outstanding():
-            raise forms.ValidationError(
-                f"That's more principal than the {self.lending.outstanding()} still owed on this lending."
-            )
+        if self.lending is not None:
+            available = self.lending.outstanding()
+            if self.instance.pk:  # editing: this payment's own principal is repayable again
+                available += self.instance.principal_amount
+            if principal > available:
+                raise forms.ValidationError(f"That's more principal than the {available} still owed on this lending.")
         return cleaned
+
+
+class EditPersonMixin:
+    """Editing an existing transaction. Keeping the same person (ignoring case
+    and spacing) keeps their stored identity untouched; typing a different name
+    goes through the normal remembered-name resolution."""
+
+    def _remember_original(self):
+        self._orig_name = getattr(self.instance, self.person_field)
+        self._orig_contact = self.instance.contact
+
+    def _resolve_person(self, cleaned):
+        name = cleaned.get(self.person_field)
+        if name and norm(name) == norm(self._orig_name):
+            cleaned.pop("person_contact", None)
+            cleaned[self.person_field] = clean_name(name)
+            cleaned["contact"] = self._orig_contact
+            return
+        super()._resolve_person(cleaned)
+
+
+class BorrowingEditForm(EditPersonMixin, BorrowingForm):
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, user=user, **kwargs)
+        self._remember_original()
+        self.fields["receiving_account"].queryset = _selectable_accounts(user, self.instance, "receiving_account_id")
+
+
+class LendingEditForm(EditPersonMixin, LendingForm):
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, user=user, **kwargs)
+        self._remember_original()
+        self.fields["source_account"].queryset = _selectable_accounts(user, self.instance, "source_account_id")
+
+
+class FixedPersonMixin:
+    """Add another transaction for a known person: the name and stored identity
+    are fixed by the server (disabled fields ignore anything posted)."""
+
+    def _fix_person(self, person):
+        name, contact = person
+        self.initial[self.person_field] = name
+        self.initial["person_contact"] = contact
+        for field in (self.person_field, "person_contact"):
+            self.fields[field].disabled = True
+        self.fields[self.person_field].widget.attrs.update({"readonly": "readonly"})
+
+
+class BorrowingAddForm(FixedPersonMixin, BorrowingForm):
+    def __init__(self, *args, user=None, person, **kwargs):
+        super().__init__(*args, user=user, **kwargs)
+        self._fix_person(person)
+
+
+class LendingAddForm(FixedPersonMixin, LendingForm):
+    def __init__(self, *args, user=None, person, **kwargs):
+        super().__init__(*args, user=user, **kwargs)
+        self._fix_person(person)
 
 
 class SettlementForm(forms.Form):

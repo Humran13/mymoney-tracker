@@ -1,3 +1,4 @@
+import copy
 import uuid
 from decimal import Decimal
 from urllib.parse import urlencode
@@ -11,9 +12,13 @@ from django.utils import timezone
 
 from apps.core.audit import log_audit_event
 
-from . import payments, people, services, settlements
+from . import editing, payments, people, services, settlements
 from .forms import (
+    BorrowingAddForm,
+    BorrowingEditForm,
     BorrowingForm,
+    LendingAddForm,
+    LendingEditForm,
     BorrowingReclassifyForm, LendingReclassifyForm,
     BorrowingRepaymentForm,
     LendingForm,
@@ -23,7 +28,7 @@ from .forms import (
     SettlementForm,
     UndoSettlementForm,
 )
-from .models import Borrowing, BorrowingRepayment, DebtSettlement, Lending
+from .models import Borrowing, BorrowingRepayment, DebtSettlement, Lending, LendingRepayment
 
 
 @login_required
@@ -442,31 +447,20 @@ def borrowing_delete(request, pk):
 
 @login_required
 def repayment_update(request, pk):
-    """Edit a repayment. Both the principal posting and the optional
-    transaction-fee posting are rebuilt from scratch by sync_postings, so
-    editing can neither duplicate nor orphan a fee."""
+    """Edit a borrowing repayment (see `_payment_edit`)."""
     repayment = get_object_or_404(
         BorrowingRepayment.objects.select_related("borrowing", "paying_account"), pk=pk, user=request.user
     )
-    borrowing = repayment.borrowing
-    if request.method == "POST":
-        form = BorrowingRepaymentForm(request.POST, user=request.user, borrowing=borrowing, instance=repayment)
-        if form.is_valid():
-            try:
-                services.update_borrowing_repayment(repayment, **form.cleaned_data)
-            except ValueError as exc:
-                form.add_error(None, str(exc))
-            else:
-                log_audit_event(request.user, "update", obj=repayment, description="Edited debt repayment")
-                messages.success(request, "Repayment updated.")
-                return redirect("debts:borrowing_detail", pk=borrowing.pk)
-    else:
-        form = BorrowingRepaymentForm(user=request.user, borrowing=borrowing, instance=repayment)
-    return render(
-        request,
-        "debts/repayment_form.html",
-        {"form": form, "borrowing": borrowing, "repayment": repayment, "mode": "edit"},
+    return _payment_edit(request, settlements.LENDER, repayment)
+
+
+@login_required
+def lending_repayment_update(request, pk):
+    """Edit a payment received against a loan (see `_payment_edit`)."""
+    repayment = get_object_or_404(
+        LendingRepayment.objects.select_related("lending", "receiving_account"), pk=pk, user=request.user
     )
+    return _payment_edit(request, settlements.BORROWER, repayment)
 
 
 @login_required
@@ -555,3 +549,216 @@ def lending_delete(request, pk):
         messages.success(request, "Lending record deleted.")
         return redirect("debts:dashboard")
     return render(request, "debts/lending_delete_confirm.html", {"lending": lending})
+
+
+# --- Editing transactions and payments ---------------------------------------
+
+
+def _side_meta(side):
+    if side == settlements.LENDER:
+        return Borrowing, "lender_name", "date_borrowed", "debts:borrowing_detail", "debts:borrowing_edit"
+    return Lending, "borrower_name", "date_lent", "debts:lending_detail", "debts:lending_edit"
+
+
+def _person_query(name, contact):
+    return urlencode({"name": name, "contact": contact})
+
+
+def _audit_metadata(plan, side):
+    return editing.audit_metadata(
+        plan,
+        side=side,
+        balance_changes=[
+            {"account": row["account"].name, "change": str(row["change"]), "before": str(row["before"])}
+            for row in plan["balance_changes"]
+        ],
+    )
+
+
+@login_required
+def person_edit(request, side):
+    """The dashboard Edit button. One transaction opens straight into its edit
+    form; several are listed so the user picks which to edit, with their payment
+    history and an Add Another Transaction action."""
+    _side_or_404(side)
+    name, contact = _person_args(request)
+    records = settlements.rename_targets(request.user, side, name, contact)
+    _model, name_attr, date_attr, detail_url, edit_url = _side_meta(side)
+    if not records:
+        messages.error(request, "That person was not found.")
+        return redirect("debts:dashboard")
+    if len(records) == 1:
+        return redirect(edit_url, pk=records[0].pk)
+    records.sort(key=lambda r: (getattr(r, date_attr), r.pk))
+    is_lender = side == settlements.LENDER
+    rows = []
+    for record in records:
+        payments_list = []
+        related = "paying_account" if is_lender else "receiving_account"
+        for repayment in record.repayments.select_related(related).order_by("date", "id"):
+            payments_list.append(
+                {
+                    "date": repayment.date,
+                    "account": repayment.paying_account if is_lender else repayment.receiving_account,
+                    "amount": repayment.amount if is_lender else repayment.principal_amount,
+                    "extra": repayment.fee_amount if is_lender else repayment.interest_amount,
+                    "edit_url": reverse(
+                        "debts:repayment_update" if is_lender else "debts:lending_repayment_update", args=[repayment.pk]
+                    ),
+                }
+            )
+        rows.append(
+            {
+                "record": record,
+                "date": getattr(record, date_attr),
+                "account": record.receiving_account if is_lender else record.source_account,
+                "total": record.total_owed() if is_lender else record.amount,
+                "outstanding": record.outstanding(),
+                "payments": payments_list,
+                "edit_url": reverse(edit_url, args=[record.pk]),
+                "detail_url": reverse(detail_url, args=[record.pk]),
+            }
+        )
+    latest = records[-1]
+    shown_name = settlements.clean_name(getattr(latest, name_attr))
+    shown_contact = settlements.clean_name(latest.contact)
+    return render(
+        request,
+        "debts/person_edit.html",
+        {
+            "side": side, "is_lender": is_lender, "name": shown_name, "contact": shown_contact, "rows": rows,
+            "total": sum((row["outstanding"] for row in rows), Decimal("0.00")),
+            "query": _person_query(shown_name, shown_contact),
+        },
+    )
+
+
+@login_required
+def person_add(request, side):
+    """Add Another Transaction: the person's stored identity is reused (the
+    name cannot be retyped or altered), everything else is entered fresh."""
+    _side_or_404(side)
+    # The person always comes from the URL (the form posts back to the same URL).
+    name, contact = request.GET.get("name", ""), request.GET.get("contact", "")
+    records = settlements.rename_targets(request.user, side, name, contact)
+    if not records:
+        messages.error(request, "That person was not found.")
+        return redirect("debts:dashboard")
+    is_lender = side == settlements.LENDER
+    _model, name_attr, date_attr, _detail, _edit = _side_meta(side)
+    latest = max(records, key=lambda r: (getattr(r, date_attr), r.pk))
+    person = (settlements.clean_name(getattr(latest, name_attr)), settlements.clean_name(latest.contact))
+    form_class = BorrowingAddForm if is_lender else LendingAddForm
+    back = f"{reverse('debts:person_edit', args=[side])}?{_person_query(*person)}"
+    if request.method == "POST":
+        form = form_class(request.POST, user=request.user, person=person)
+        if form.is_valid():
+            try:
+                if is_lender:
+                    created = services.create_borrowing(user=request.user, **form.cleaned_data)
+                else:
+                    created = services.create_lending(user=request.user, **form.cleaned_data)
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                log_audit_event(
+                    request.user, "create", obj=created,
+                    description=f"Added another {'borrowing' if is_lender else 'lending'} for {person[0]}",
+                )
+                messages.success(request, f"Another transaction recorded for {person[0]}.")
+                return redirect(back)
+    else:
+        form = form_class(user=request.user, person=person, initial={date_attr: timezone.localdate()})
+    template = "debts/borrowing_form.html" if is_lender else "debts/lending_form.html"
+    return render(request, template, {"form": form, "person_name": person[0], "back_url": back})
+
+
+def _transaction_edit(request, side, record):
+    is_lender = side == settlements.LENDER
+    _model, name_attr, _date_attr, detail_url, _edit = _side_meta(side)
+    form_class = BorrowingEditForm if is_lender else LendingEditForm
+    context = {"side": side, "is_lender": is_lender, "record": record, "confirming": False}
+    version = record.updated_at.isoformat()
+    if request.method == "POST":
+        version = request.POST.get("version", version)
+        form = form_class(request.POST, user=request.user, instance=copy.copy(record))
+        if form.is_valid():
+            changes = dict(form.cleaned_data)
+            try:
+                plan = editing.plan_edit(request.user, side, record.pk, changes)
+                if not plan["diff"]:
+                    messages.info(request, "Nothing changed.")
+                    return redirect(detail_url, pk=record.pk)
+                if plan["needs_confirmation"] and request.POST.get("confirm") != "1":
+                    context.update(confirming=True, plan=plan)
+                else:
+                    plan = editing.apply_edit(
+                        user=request.user, side=side, pk=record.pk, changes=changes, version=request.POST.get("version")
+                    )
+                    log_audit_event(
+                        request.user, "update", affected_user=request.user, obj=plan["new"],
+                        description="Edited debt transaction", metadata=_audit_metadata(plan, side), request=request,
+                    )
+                    messages.success(request, "Transaction updated.")
+                    return redirect(detail_url, pk=record.pk)
+            except editing.EditError as exc:
+                form.add_error(None, str(exc))
+    else:
+        form = form_class(user=request.user, instance=record)
+    shown_name = settlements.clean_name(getattr(record, name_attr))
+    shown_contact = settlements.clean_name(record.contact)
+    context.update(
+        form=form, version=version, name=shown_name,
+        add_url=f"{reverse('debts:person_add', args=[side])}?{_person_query(shown_name, shown_contact)}",
+        rename_url=f"{reverse('debts:person_rename', args=[side])}?{_person_query(shown_name, shown_contact)}",
+        detail_url=reverse(detail_url, args=[record.pk]),
+        payments=list(record.repayments.order_by("date", "id")),
+    )
+    return render(request, "debts/transaction_edit.html", context)
+
+
+@login_required
+def borrowing_edit(request, pk):
+    return _transaction_edit(request, settlements.LENDER, get_object_or_404(Borrowing, pk=pk, user=request.user))
+
+
+@login_required
+def lending_edit(request, pk):
+    return _transaction_edit(request, settlements.BORROWER, get_object_or_404(Lending, pk=pk, user=request.user))
+
+
+def _payment_edit(request, side, payment):
+    """Edit one recorded payment. Balance-affecting changes are previewed and
+    must be confirmed; the write re-validates under a lock. Other payments of
+    the same debt, grouped siblings and offsets are never touched."""
+    is_lender = side == settlements.LENDER
+    parent = payment.borrowing if is_lender else payment.lending
+    detail_url = "debts:borrowing_detail" if is_lender else "debts:lending_detail"
+    form_class = BorrowingRepaymentForm if is_lender else LendingRepaymentForm
+    form_kwargs = {"borrowing": parent} if is_lender else {"lending": parent}
+    context = {"side": side, "is_lender": is_lender, "payment": payment, "parent": parent, "confirming": False}
+    if request.method == "POST":
+        form = form_class(request.POST, user=request.user, instance=copy.copy(payment), **form_kwargs)
+        if form.is_valid():
+            changes = dict(form.cleaned_data)
+            try:
+                plan = editing.plan_payment_edit(request.user, side, payment.pk, changes)
+                if not plan["diff"]:
+                    messages.info(request, "Nothing changed.")
+                    return redirect(detail_url, pk=parent.pk)
+                if plan["needs_confirmation"] and request.POST.get("confirm") != "1":
+                    context.update(confirming=True, plan=plan)
+                else:
+                    plan = editing.apply_payment_edit(user=request.user, side=side, pk=payment.pk, changes=changes)
+                    log_audit_event(
+                        request.user, "update", affected_user=request.user, obj=payment,
+                        description="Edited debt payment", metadata=_audit_metadata(plan, side), request=request,
+                    )
+                    messages.success(request, "Payment updated and balances recalculated.")
+                    return redirect(detail_url, pk=parent.pk)
+            except editing.EditError as exc:
+                form.add_error(None, str(exc))
+    else:
+        form = form_class(user=request.user, instance=payment, **form_kwargs)
+    context.update(form=form, back_url=reverse(detail_url, args=[parent.pk]))
+    return render(request, "debts/repayment_form.html", context)

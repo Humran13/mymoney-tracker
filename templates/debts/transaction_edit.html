@@ -1,0 +1,86 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Edit transaction · {{ name }} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="debts:dashboard" %}
+<div class="flex items-start justify-between mb-4 flex-wrap gap-2">
+  <div class="min-w-0">
+    <h1 class="text-xl font-semibold break-words">Edit {% if is_lender %}borrowing{% else %}lending{% endif %} · {{ name }}</h1>
+    <p class="text-sm text-slate-500">{{ record.get_status_display }} · {{ record.outstanding|money }} outstanding</p>
+  </div>
+  <a href="{{ add_url }}" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white" data-testid="add-another">Add Another Transaction</a>
+</div>
+
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg mb-6">
+  {% if confirming %}
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-slate-800" data-testid="edit-confirmation">
+    <p class="font-medium mb-2">Please confirm these changes</p>
+    {% include "debts/_edit_plan.html" %}
+    {% if plan.identity_changed %}
+    <p class="mb-2 text-amber-900" data-testid="edit-identity-note">This moves only this transaction to <strong>{% if is_lender %}{{ plan.new.lender_name }}{% else %}{{ plan.new.borrower_name }}{% endif %}</strong>. The person&rsquo;s other transactions keep their current name.{% if plan.merges_into_existing %} Someone with exactly this name already exists, so it will be shown together with their transactions.{% endif %}</p>
+    {% endif %}
+  </div>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% include "debts/_hidden_form.html" %}
+    <input type="hidden" name="version" value="{{ version }}">
+    <input type="hidden" name="confirm" value="1">
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Confirm and save</button>
+    <button type="button" class="ml-2 text-sm text-slate-600 underline" onclick="history.back()">Back to edit</button>
+    <a href="{{ detail_url }}" class="ml-2 text-sm text-slate-500">Cancel</a>
+  </form>
+  {% else %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="version" value="{{ version }}">
+    {% for error in form.non_field_errors %}<p class="mb-3 text-sm text-red-600" role="alert">{{ error }}</p>{% endfor %}
+    {% include "base/_field.html" with field=form.debt_type %}
+    <p id="noncashNotice" class="text-xs text-slate-500 mb-3 hidden">{% if is_lender %}Goods or services on credit increase what you owe but never change your cash.{% else %}Goods or services on credit increase what you are owed but never change your cash.{% endif %}</p>
+    {% if is_lender %}{% include "base/_field.html" with field=form.lender_name %}{% else %}{% include "base/_field.html" with field=form.borrower_name %}{% endif %}
+    {{ form.person_contact }}
+    {% include "base/_field.html" with field=form.amount %}
+    {% if is_lender %}{% include "base/_field.html" with field=form.date_borrowed %}{% else %}{% include "base/_field.html" with field=form.date_lent %}{% endif %}
+    <div id="accountField">
+      {% if is_lender %}{% include "base/_field.html" with field=form.receiving_account %}{% else %}{% include "base/_field.html" with field=form.source_account %}{% endif %}
+    </div>
+    {% include "base/_field.html" with field=form.due_date %}
+    {% include "base/_field.html" with field=form.interest_amount %}
+    {% include "base/_field.html" with field=form.notes %}
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save changes</button>
+    <a href="{{ detail_url }}" class="ml-2 text-sm text-slate-500">Cancel</a>
+  </form>
+  <p class="mt-4 text-xs text-slate-500">Changing the person here affects only this transaction. To correct the name on all of this person&rsquo;s transactions, use <a class="text-brand-700 dark:text-brand-400 font-medium" href="{{ rename_url }}" data-testid="rename-all">Edit name for all transactions</a>.</p>
+  {% endif %}
+</div>
+
+<h2 class="font-semibold mb-2" id="payment-history">Payment history</h2>
+<div class="space-y-2 max-w-lg" data-testid="payment-history">
+  {% for p in payments %}
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm flex justify-between gap-2">
+    <span class="min-w-0 break-words">{{ p.date }} · {% if is_lender %}{{ p.paying_account.name }}{% else %}{{ p.receiving_account.name }}{% endif %}</span>
+    <span class="whitespace-nowrap"><span class="font-medium">{% if is_lender %}{{ p.amount|money }}{% else %}{{ p.total_received|money }}{% endif %}</span>
+      <a href="{% if is_lender %}{% url 'debts:repayment_update' p.pk %}{% else %}{% url 'debts:lending_repayment_update' p.pk %}{% endif %}" class="ml-2 text-brand-700 dark:text-brand-400" data-testid="edit-payment">Edit</a></span>
+  </div>
+  {% empty %}
+  <p class="text-slate-500 text-sm">No payments recorded yet.</p>
+  {% endfor %}
+</div>
+
+{% if not confirming %}
+{% include "base/_name_autocomplete.html" with url_name="debts:name_suggest" %}
+<script>
+  (function () {
+    var typeField = document.getElementById('{{ form.debt_type.id_for_label }}');
+    var accountField = document.getElementById('accountField');
+    var notice = document.getElementById('noncashNotice');
+    function toggle() {
+      var isCash = typeField.value === 'cash_loan';
+      accountField.classList.toggle('hidden', !isCash);
+      notice.classList.toggle('hidden', isCash);
+    }
+    typeField.addEventListener('change', toggle);
+    toggle();
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -38,6 +38,9 @@ def test_rename_then_pay(signed_in_page, live_server, width):
 
     page.locator('[data-person="Dakka"] [data-testid="edit-person"]').click()
     page.wait_for_load_state()
+    # Edit now opens the full transaction editor; renaming everything is one click further.
+    page.locator('[data-testid="rename-all"]').click()
+    page.wait_for_load_state()
     assert "1 transaction" in page.locator('[data-testid="rename-scope"]').inner_text()
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     page.fill("#id_name", "DAKA")

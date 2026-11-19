@@ -9,7 +9,7 @@
     <p class="text-sm text-slate-500">{% if is_lender %}You owe{% else %}Owes you{% endif %} <strong data-testid="person-total">{{ total|money }}</strong> across {{ records|length }} transaction{{ records|length|pluralize }}</p>
   </div>
   <div class="flex gap-2">
-    <a href="{% url 'debts:person_rename' side %}?name={{ name|urlencode }}&contact={{ contact|urlencode }}" class="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Edit name</a>
+    <a href="{% url 'debts:person_edit' side %}?name={{ name|urlencode }}&contact={{ contact|urlencode }}" class="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600" data-testid="edit-person-detail">Edit</a>
     <a href="{% url 'debts:person_payment' side %}?name={{ name|urlencode }}&contact={{ contact|urlencode }}" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white" data-testid="record-payment">Record payment</a>
   </div>
 </div>
