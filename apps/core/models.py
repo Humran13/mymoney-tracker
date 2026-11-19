@@ -85,3 +85,19 @@ class AuditEvent(TimeStampedModel):
 
     def __str__(self):
         return f"{self.action} by user#{self.actor_id} at {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class IdempotencyKey(UserOwnedModel):
+    """One-shot token for a submitted form. The unique (user, key) row is
+    created inside the same DB transaction as the money it guards, so a
+    double-click, refresh, or concurrent duplicate request fails on the
+    unique index and rolls back instead of posting twice."""
+
+    key = models.UUIDField()
+    scope = models.CharField(max_length=40)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "key"], name="unique_idempotency_key_per_user")]
+
+    def __str__(self):
+        return f"{self.scope}:{self.key}"

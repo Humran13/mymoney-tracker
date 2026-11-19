@@ -4,20 +4,21 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.audit import log_audit_event
 
-from . import services, settlements
+from . import payments, people, services, settlements
 from .forms import (
     BorrowingForm,
     BorrowingReclassifyForm, LendingReclassifyForm,
     BorrowingRepaymentForm,
     LendingForm,
     LendingRepaymentForm,
+    PersonPaymentForm,
     PersonRenameForm,
     SettlementForm,
     UndoSettlementForm,
@@ -51,6 +52,97 @@ def dashboard(request):
             .prefetch_related("lines__borrowing", "lines__lending")[:20],
         },
     )
+
+
+@login_required
+def name_suggest(request):
+    """Remembered names for the autocomplete: this user's records only."""
+    return JsonResponse({"results": people.suggest(request.user, request.GET.get("q", ""))})
+
+
+def _side_or_404(side):
+    if side not in (settlements.LENDER, settlements.BORROWER):
+        raise Http404
+    return side
+
+
+def _person_args(request):
+    source = request.POST if request.method == "POST" else request.GET
+    return source.get("name", ""), source.get("contact", "")
+
+
+@login_required
+def person_detail(request, side):
+    """All of one person's transactions, with the grouped Record payment action."""
+    _side_or_404(side)
+    name, contact = _person_args(request)
+    records = payments.person_records(request.user, side, name, contact)
+    if not records:
+        messages.info(request, "That person has nothing outstanding.")
+        return redirect("debts:dashboard")
+    return render(
+        request,
+        "debts/person_detail.html",
+        {
+            "side": side, "name": settlements.clean_name(name), "contact": contact, "records": records,
+            "total": payments.total_outstanding(records), "is_lender": side == settlements.LENDER,
+        },
+    )
+
+
+@login_required
+def person_payment(request, side):
+    """Grouped Record payment: propose an oldest-first allocation, confirm,
+    then record it atomically. The allocation is recomputed from live,
+    locked balances on the confirm POST."""
+    _side_or_404(side)
+    name, contact = _person_args(request)
+    records = payments.person_records(request.user, side, name, contact)
+    if not records:
+        messages.info(request, "That person has nothing outstanding.")
+        return redirect("debts:dashboard")
+    total = payments.total_outstanding(records)
+    is_lender = side == settlements.LENDER
+    context = {"side": side, "name": settlements.clean_name(name), "contact": contact, "total": total,
+               "records": records, "is_lender": is_lender, "confirming": False}
+    if request.method == "POST":
+        form = PersonPaymentForm(request.POST, user=request.user, side=side)
+        if form.is_valid():
+            data = form.cleaned_data
+            amount = data["amount"]
+            if request.POST.get("confirm") == "1" and payments.already_recorded(request.user, data["token"]):
+                messages.info(request, "That payment was already recorded.")
+                return redirect("debts:dashboard")
+            if amount > total:
+                form.add_error("amount", f"That is more than the {total:,.2f} still outstanding.")
+            elif request.POST.get("confirm") == "1":
+                try:
+                    results = payments.record_person_payment(
+                        user=request.user, side=side, name=name, contact=contact, principal=amount,
+                        interest=data.get("interest_amount") or 0, fee=data.get("fee_amount") or 0,
+                        date=data["date"], account=data["account"], notes=data["notes"], token=data["token"],
+                    )
+                except payments.DuplicatePayment:
+                    messages.info(request, "That payment was already recorded.")
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                else:
+                    for _record, repayment in results:
+                        log_audit_event(request.user, "create", obj=repayment, description="Grouped payment allocation")
+                    messages.success(request, f"Payment of {amount:,.0f} recorded across {len(results)} transaction(s).")
+                return redirect("debts:dashboard")
+            else:
+                allocation = payments.allocate(records, amount)
+                context.update(
+                    confirming=True, allocation=allocation, remaining=total - amount,
+                    interest=data.get("interest_amount") or 0, fee=data.get("fee_amount") or 0,
+                )
+    else:
+        form = PersonPaymentForm(
+            user=request.user, side=side, initial={"amount": total, "date": timezone.localdate(), "token": uuid.uuid4()}
+        )
+    context["form"] = form
+    return render(request, "debts/person_payment.html", context)
 
 
 def _rename(request, side, name, contact, record=None):
@@ -409,12 +501,19 @@ def lending_detail(request, pk):
     if request.method == "POST":
         form = LendingRepaymentForm(request.POST, user=request.user, lending=lending)
         if form.is_valid():
-            services.record_lending_repayment(user=request.user, lending=lending, **form.cleaned_data)
-            messages.success(request, "Repayment received recorded.")
-            return redirect("debts:lending_detail", pk=pk)
+            try:
+                services.record_lending_repayment(user=request.user, lending=lending, **form.cleaned_data)
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, "Repayment received recorded.")
+                return redirect("debts:lending_detail", pk=pk)
     else:
         form = LendingRepaymentForm(user=request.user, lending=lending, initial={"date": timezone.localdate()})
-    return render(request, "debts/lending_detail.html", {"lending": lending, "form": form})
+    person_total = payments.total_outstanding(
+        payments.person_records(request.user, settlements.BORROWER, lending.borrower_name, lending.contact)
+    )
+    return render(request, "debts/lending_detail.html", {"lending": lending, "form": form, "person_total": person_total})
 
 
 @login_required

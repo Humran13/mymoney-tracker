@@ -1,0 +1,46 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}Record payment · {{ name }} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<a href="{% url 'debts:person_detail' side %}?name={{ name|urlencode }}&contact={{ contact|urlencode }}" class="text-sm text-slate-500 mb-3 inline-block">&larr; Back</a>
+<h1 class="text-xl font-semibold mb-1">Record payment {% if is_lender %}to{% else %}from{% endif %} {{ name }}</h1>
+<p class="text-sm text-slate-500 mb-4">{{ records|length }} outstanding transaction{{ records|length|pluralize }}, {{ total|money }} in total. This is a real payment through an account; for a noncash offset use Pay on the Debts page instead.</p>
+<div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-lg">
+  {% if confirming %}
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm" data-testid="payment-confirmation">
+    <p class="font-medium mb-2">Please confirm this payment of {{ form.cleaned_data.amount|money }} (oldest first):</p>
+    {% for record, part in allocation %}
+    <p class="flex justify-between gap-2"><span>{% if is_lender %}{{ record.date_borrowed }}{% else %}{{ record.date_lent }}{% endif %}</span><span>{{ part|money }} of {{ record.outstanding_now|money }}</span></p>
+    {% endfor %}
+    {% if interest %}<p class="mt-1">Interest received: {{ interest|money }}</p>{% endif %}
+    {% if fee %}<p class="mt-1">Transaction fee: {{ fee|money }}</p>{% endif %}
+    <p class="mt-2">{{ form.cleaned_data.account.name }} will {% if is_lender %}decrease{% else %}increase{% endif %} by {{ form.cleaned_data.amount|money }}{% if interest %} + {{ interest|money }} interest{% endif %}{% if fee %} + {{ fee|money }} fee{% endif %}, once. Still outstanding afterwards: <strong>{{ remaining|money }}</strong></p>
+  </div>
+  {% endif %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="name" value="{{ name }}">
+    <input type="hidden" name="contact" value="{{ contact }}">
+    {{ form.token }}
+    {% if confirming %}
+    <input type="hidden" name="amount" value="{{ form.cleaned_data.amount }}">
+    {% if interest %}<input type="hidden" name="interest_amount" value="{{ interest }}">{% endif %}
+    {% if fee %}<input type="hidden" name="fee_amount" value="{{ fee }}">{% endif %}
+    <input type="hidden" name="date" value="{{ form.cleaned_data.date|date:'Y-m-d' }}">
+    <input type="hidden" name="account" value="{{ form.cleaned_data.account.pk }}">
+    <input type="hidden" name="notes" value="{{ form.cleaned_data.notes }}">
+    <input type="hidden" name="confirm" value="1">
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Confirm payment</button>
+    <a href="{% url 'debts:dashboard' %}" class="ml-2 text-sm text-slate-500">Cancel</a>
+    {% else %}
+    {% for error in form.non_field_errors %}<p class="mb-3 text-sm text-red-600" role="alert">{{ error }}</p>{% endfor %}
+    {% include "base/_field.html" with field=form.amount %}
+    {% if is_lender %}{% include "base/_field.html" with field=form.fee_amount %}{% else %}{% include "base/_field.html" with field=form.interest_amount %}{% endif %}
+    {% include "base/_field.html" with field=form.date %}
+    {% include "base/_field.html" with field=form.account %}
+    {% include "base/_field.html" with field=form.notes %}
+    <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Review payment</button>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

@@ -9,7 +9,7 @@
     {% include "base/_field.html" with field=form.debt_type %}
     <p id="noncashNotice" class="text-xs text-slate-500 mb-3 hidden">Recording goods or services on credit increases what you are owed but does not reduce your available cash. Only repayments you receive add cash.</p>
     {% include "base/_field.html" with field=form.borrower_name %}
-    {% include "base/_field.html" with field=form.contact %}
+    {{ form.person_contact }}
     {% include "base/_field.html" with field=form.amount %}
     {% include "base/_field.html" with field=form.date_lent %}
     <div id="sourceAccountField">
@@ -33,4 +33,5 @@
   debtTypeField.addEventListener('change', toggleSourceAccount);
   toggleSourceAccount();
 </script>
+{% include "base/_name_autocomplete.html" with url_name="debts:name_suggest" %}
 {% endblock %}

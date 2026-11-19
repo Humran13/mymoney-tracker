@@ -1,0 +1,94 @@
+{% comment %}
+Shared remembered-name combobox. Usage: put data-name-autocomplete on the text
+input and include this partial once with url_name. Picking a suggestion copies
+its stored identity into the hidden input named person_contact; typing again
+clears it, and typing a brand-new name is always allowed (nothing is forced).
+{% endcomment %}
+<script>
+(function () {
+  var input = document.querySelector('[data-name-autocomplete]');
+  if (!input) return;
+  var hidden = input.form.querySelector('[name="person_contact"]');
+  var url = "{% url url_name %}";
+  var list = document.createElement('ul');
+  var listId = input.id + '_suggestions';
+  list.id = listId;
+  list.setAttribute('role', 'listbox');
+  list.hidden = true;
+  list.className = 'absolute z-20 left-0 right-0 mt-1 max-h-60 overflow-auto rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-lg text-sm';
+  var wrap = input.parentNode;
+  wrap.style.position = 'relative';
+  wrap.appendChild(list);
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-expanded', 'false');
+  input.setAttribute('aria-controls', listId);
+
+  var items = [], active = -1, timer = null, controller = null;
+
+  function close() {
+    list.hidden = true; active = -1;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  }
+  function highlight(i) {
+    var nodes = list.children;
+    for (var n = 0; n < nodes.length; n++) {
+      var on = n === i;
+      nodes[n].setAttribute('aria-selected', on ? 'true' : 'false');
+      nodes[n].classList.toggle('bg-brand-50', on);
+      nodes[n].classList.toggle('dark:bg-slate-700', on);
+    }
+    active = i;
+    if (i >= 0) { input.setAttribute('aria-activedescendant', nodes[i].id); nodes[i].scrollIntoView({block: 'nearest'}); }
+    else input.removeAttribute('aria-activedescendant');
+  }
+  function choose(i) {
+    var item = items[i];
+    if (!item) return;
+    input.value = item.name;
+    if (hidden) hidden.value = item.contact || '';
+    close();
+  }
+  function render() {
+    list.textContent = '';
+    items.forEach(function (item, i) {
+      var li = document.createElement('li');
+      li.id = listId + '_' + i;
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', 'false');
+      li.className = 'cursor-pointer px-3 py-2 min-h-[44px] flex items-center';
+      li.textContent = item.label;
+      // pointerdown (not click) so the input does not blur first; works for mouse and touch
+      li.addEventListener('pointerdown', function (e) { e.preventDefault(); choose(i); });
+      list.appendChild(li);
+    });
+    list.hidden = items.length === 0;
+    input.setAttribute('aria-expanded', items.length ? 'true' : 'false');
+    active = -1;
+  }
+  function fetchSuggestions() {
+    var q = input.value.trim();
+    if (!q) { items = []; render(); return; }
+    if (controller) controller.abort();
+    controller = window.AbortController ? new AbortController() : null;
+    fetch(url + '?q=' + encodeURIComponent(q), {credentials: 'same-origin', signal: controller ? controller.signal : undefined})
+      .then(function (r) { return r.ok ? r.json() : {results: []}; })
+      .then(function (data) { if (input.value.trim() === q) { items = data.results || []; render(); } })
+      .catch(function () {});
+  }
+  input.addEventListener('input', function () {
+    if (hidden) hidden.value = '';  // typing again means "not a picked identity" until chosen
+    clearTimeout(timer);
+    timer = setTimeout(fetchSuggestions, 80);
+  });
+  input.addEventListener('keydown', function (e) {
+    if (list.hidden) { if (e.key === 'ArrowDown' && input.value.trim()) fetchSuggestions(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); highlight((active + 1) % items.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); highlight((active - 1 + items.length) % items.length); }
+    else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); choose(active); } }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+  });
+  input.addEventListener('blur', function () { setTimeout(close, 120); });
+})();
+</script>

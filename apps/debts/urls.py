@@ -6,9 +6,12 @@ app_name = "debts"
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("names/suggest/", views.name_suggest, name="name_suggest"),
     path("settle/", views.settle, name="settle"),
     path("settle/identity/", views.identity_confirm, name="identity"),
     path("settle/identity/unlink/", views.identity_unlink, name="identity_unlink"),
+    path("people/<str:side>/", views.person_detail, name="person_detail"),
+    path("people/<str:side>/pay/", views.person_payment, name="person_payment"),
     path("people/<str:side>/rename/", views.person_rename, name="person_rename"),
     path("borrowings/<int:pk>/rename/", views.borrowing_rename, name="borrowing_rename"),
     path("lendings/<int:pk>/rename/", views.lending_rename, name="lending_rename"),
