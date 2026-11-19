@@ -168,3 +168,43 @@ class PersonRenameForm(forms.Form):
     expected_count = forms.IntegerField(widget=forms.HiddenInput, min_value=0)
     old_name = forms.CharField(widget=forms.HiddenInput)
     old_contact = forms.CharField(widget=forms.HiddenInput, required=False)
+
+
+class PersonPaymentForm(forms.Form):
+    """One real payment for all of a person's outstanding transactions.
+    `side` decides labels/extra fields: money received (borrower side, with
+    optional interest) or money paid out (lender side, with optional fee)."""
+
+    amount = forms.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.00"), label="Payment amount")
+    interest_amount = forms.DecimalField(
+        max_digits=18, decimal_places=2, min_value=Decimal("0.00"), required=False, label="Interest received (optional)"
+    )
+    fee_amount = forms.DecimalField(
+        max_digits=18, decimal_places=2, min_value=Decimal("0.00"), required=False, label="Transaction fee (optional)"
+    )
+    date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+    account = forms.ModelChoiceField(queryset=FinancialAccount.objects.none(), label="Account")
+    notes = forms.CharField(max_length=255, required=False)
+    token = forms.UUIDField(widget=forms.HiddenInput)
+
+    def __init__(self, *args, user=None, side="borrower", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.side = side
+        self.fields["account"].queryset = FinancialAccount.objects.filter(
+            user=user, status=FinancialAccount.Status.ACTIVE
+        )
+        if side == "borrower":
+            self.fields["account"].label = "Receiving account"
+            del self.fields["fee_amount"]
+        else:
+            self.fields["account"].label = "Paying account"
+            self.fields["amount"].min_value = Decimal("0.01")
+            del self.fields["interest_amount"]
+
+    def clean(self):
+        cleaned = super().clean()
+        amount = cleaned.get("amount") or Decimal("0")
+        interest = cleaned.get("interest_amount") or Decimal("0")
+        if amount <= 0 and interest <= 0 and "amount" not in self.errors:
+            raise forms.ValidationError("Enter an amount received.")
+        return cleaned

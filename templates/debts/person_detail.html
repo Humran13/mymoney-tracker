@@ -1,0 +1,27 @@
+{% extends "base/base.html" %}
+{% load money %}
+{% block title %}{{ name }} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+{% include "base/_back_link.html" with back_url_name="debts:dashboard" %}
+<div class="flex items-start justify-between mb-4 flex-wrap gap-2">
+  <div class="min-w-0">
+    <h1 class="text-xl font-semibold break-words">{{ name }}{% if contact %} <span class="text-sm text-slate-500">{{ contact }}</span>{% endif %}</h1>
+    <p class="text-sm text-slate-500">{% if is_lender %}You owe{% else %}Owes you{% endif %} <strong data-testid="person-total">{{ total|money }}</strong> across {{ records|length }} transaction{{ records|length|pluralize }}</p>
+  </div>
+  <div class="flex gap-2">
+    <a href="{% url 'debts:person_rename' side %}?name={{ name|urlencode }}&contact={{ contact|urlencode }}" class="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Edit name</a>
+    <a href="{% url 'debts:person_payment' side %}?name={{ name|urlencode }}&contact={{ contact|urlencode }}" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white" data-testid="record-payment">Record payment</a>
+  </div>
+</div>
+<div class="space-y-2">
+  {% for r in records %}
+  <a href="{% if is_lender %}{% url 'debts:borrowing_detail' r.pk %}{% else %}{% url 'debts:lending_detail' r.pk %}{% endif %}" class="block bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-sm">
+    <div class="flex justify-between gap-2">
+      <span class="min-w-0 break-words">{% if is_lender %}{{ r.date_borrowed }} · {{ r.get_debt_type_display }}{% else %}{{ r.date_lent }}{% endif %}{% if r.notes %} · {{ r.notes|truncatechars:40 }}{% endif %}</span>
+      <span class="font-medium whitespace-nowrap">{{ r.outstanding_now|money }}</span>
+    </div>
+    <p class="text-xs text-slate-500">{% if r.is_overdue %}<span class="text-red-600 font-medium">OVERDUE</span>{% endif %}{% if r.due_date %} due {{ r.due_date }}{% endif %}</p>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}
