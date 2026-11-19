@@ -163,7 +163,7 @@ def _debt_edit(serializer, instance, side, validated_data):
 
     user = serializer.context["request"].user
     try:
-        plan = editing.apply_edit(user=user, side=side, pk=instance.pk, changes=dict(validated_data))
+        plan = editing.apply_edit(user=user, side=side, pk=instance.pk, changes=dict(validated_data), allow_merge=False)
     except editing.EditError as exc:
         raise serializers.ValidationError(str(exc)) from exc
     if plan["diff"]:

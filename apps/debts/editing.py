@@ -154,7 +154,7 @@ def _earliest_activity(record, side):
     return min(dates) if dates else None
 
 
-def plan_edit(user, side, pk, changes, *, record=None) -> dict:
+def plan_edit(user, side, pk, changes, *, record=None, allow_merge=True) -> dict:
     """Validate an edit and describe its effect without writing anything."""
     cfg = _config(side)
     record = record or _load(user, side, pk)
@@ -165,6 +165,7 @@ def plan_edit(user, side, pk, changes, *, record=None) -> dict:
 
     name_attr, date_attr, account_attr = cfg["name"], cfg["date"], cfg["account"]
     setattr(new, name_attr, clean_name(getattr(new, name_attr)))
+    new.contact = clean_name(new.contact)
     if not getattr(new, name_attr):
         raise EditError("Enter a name.")
     if new.amount is None or new.amount <= 0:
@@ -217,6 +218,11 @@ def plan_edit(user, side, pk, changes, *, record=None) -> dict:
             person_key(getattr(other, name_attr), other.contact) == new_key
             for other in cfg["model"].objects.filter(user=user).exclude(pk=record.pk)
         )
+        if merges_into_existing and not allow_merge:
+            raise EditError(
+                "That name and contact already belong to another person, so this change would merge two people. "
+                "Use the web editor, which asks you to confirm, or choose a different name or contact."
+            )
 
     specs = cfg["postings"](new)
     delta = posting_delta(record, specs)
@@ -235,6 +241,8 @@ def plan_edit(user, side, pk, changes, *, record=None) -> dict:
         if not same:
             diff.append({"field": field, "label": _LABELS[field], "before": _show(before), "after": _show(after)})
 
+    if clean_name(record.contact) != clean_name(new.contact):  # contact-only changes must never vanish
+        diff.append({"field": "contact", "label": "Contact", "before": _show(record.contact), "after": _show(new.contact)})
     changed_fields = {item["field"] for item in diff}
     return {
         "record": record,
@@ -252,14 +260,14 @@ def plan_edit(user, side, pk, changes, *, record=None) -> dict:
 
 
 @db_transaction.atomic
-def apply_edit(*, user, side, pk, changes, version=None) -> dict:
+def apply_edit(*, user, side, pk, changes, version=None, allow_merge=True) -> dict:
     """Lock the record, re-validate against the live figures, then save the
     record and replace its postings in the same database transaction."""
     cfg = _config(side)
     record = _load(user, side, pk, lock=True)
     if version and record.updated_at.isoformat() != version:
         raise EditError("This transaction was changed elsewhere after you opened it. Reload it and try again.")
-    plan = plan_edit(user, side, pk, changes, record=record)
+    plan = plan_edit(user, side, pk, changes, record=record, allow_merge=allow_merge)
     if not plan["diff"]:
         return plan
     new = plan["new"]
@@ -274,7 +282,15 @@ def apply_edit(*, user, side, pk, changes, version=None) -> dict:
 
 
 def audit_metadata(plan, **extra) -> dict:
-    return {"changes": [{k: item[k] for k in ("label", "before", "after")} for item in plan["diff"]], **extra}
+    meta = {"changes": [{k: item[k] for k in ("label", "before", "after")} for item in plan["diff"]], **extra}
+    if plan.get("identity_changed"):
+        name_attr = "lender_name" if hasattr(plan["record"], "lender_name") else "borrower_name"
+        meta["identity"] = {
+            "from": {"name": getattr(plan["record"], name_attr), "contact": plan["record"].contact},
+            "to": {"name": getattr(plan["new"], name_attr), "contact": plan["new"].contact},
+            "merged_into_existing": plan["merges_into_existing"],
+        }
+    return meta
 
 
 # --- payments ----------------------------------------------------------------

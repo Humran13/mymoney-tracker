@@ -260,3 +260,98 @@ class ApiIsolationTests(ApiBase):
         self.assertEqual(loan.source_account_id, self.cash.pk)
         self.assertEqual(self.bal(self.cash), D("1000000") - D("40000") + D("1000") - D("100"))
         self.assertEqual(BorrowingRepayment.objects.count() + LendingRepayment.objects.count(), 2)
+
+
+class ApiIdentityTests(ApiBase):
+    def lend_c(self, name, contact, amount="1000"):
+        return ds.create_lending(
+            user=self.user, debt_type="cash_loan", borrower_name=name, contact=contact, amount=D(amount), date_lent=JAN,
+            source_account=self.cash, due_date=None, interest_amount=D("0"), notes="",
+        )
+
+    def audit(self):
+        from apps.core.models import AuditEvent
+
+        return AuditEvent.objects.filter(description="Edited debt via API").latest("id")
+
+    def test_contact_only_change_is_applied_and_audited(self):
+        loan = self.lend_c("Ann", "0700")
+        r = self.patch("lendings", loan.pk, {"contact": "0711"})
+        self.assertEqual(r.status_code, 200, r.content)
+        loan.refresh_from_db()
+        self.assertEqual(loan.contact, "0711")
+        meta = self.audit().metadata
+        self.assertEqual(meta["changes"], [{"label": "Contact", "before": "0700", "after": "0711"}])
+        self.assertEqual(meta["identity"]["from"], {"name": "Ann", "contact": "0700"})
+        self.assertEqual(meta["identity"]["to"], {"name": "Ann", "contact": "0711"})
+        self.assertFalse(meta["identity"]["merged_into_existing"])
+
+    def test_unchanged_contact_is_a_no_op(self):
+        loan = self.lend_c("Ann", "0700")
+        self.patch("lendings", loan.pk, {"contact": "0700"})
+        from apps.core.models import AuditEvent
+
+        self.assertFalse(AuditEvent.objects.filter(description="Edited debt via API").exists())
+
+    def test_combined_name_and_contact_change(self):
+        loan = self.lend_c("Ann", "0700")
+        self.assertEqual(self.patch("lendings", loan.pk, {"borrower_name": "Anne", "contact": "0722"}).status_code, 200)
+        loan.refresh_from_db()
+        self.assertEqual((loan.borrower_name, loan.contact), ("Anne", "0722"))
+        labels = {c["label"] for c in self.audit().metadata["changes"]}
+        self.assertEqual(labels, {"Person", "Contact"})
+
+    def test_change_that_would_merge_two_people_is_refused(self):
+        self.lend_c("Sam", "0700")
+        other = self.lend_c("Sam", "0711")
+        r = self.patch("lendings", other.pk, {"contact": "0700"})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("merge two people", str(r.json()))
+        other.refresh_from_db()
+        self.assertEqual(other.contact, "0711")
+        # same through a name change onto an existing person
+        solo = self.lend_c("Solo", "")
+        self.assertEqual(self.patch("lendings", solo.pk, {"borrower_name": "Sam", "contact": "0700"}).status_code, 400)
+
+    def test_ambiguous_same_name_stays_separate(self):
+        a, b = self.lend_c("Sam", "0700"), self.lend_c("Sam", "0711")
+        self.assertEqual(self.patch("lendings", a.pk, {"notes": "only a"}).status_code, 200)
+        a.refresh_from_db(), b.refresh_from_db()
+        self.assertEqual((a.contact, b.contact, b.notes), ("0700", "0711", ""))
+
+    def test_contact_change_blocked_for_settlement_participant(self):
+        self.lend_c("DAKA", "", "104000")
+        self.borrow("20000", name="DAKA", debt_type="goods_credit", account=None)
+        settlements.settle_with_person(user=self.user, name="DAKA", amount=D("20000"), date=TODAY, token=uuid.uuid4())
+        loan = Lending.objects.get()
+        r = self.patch("lendings", loan.pk, {"contact": "0799"})
+        self.assertEqual(r.status_code, 400)
+        loan.refresh_from_db()
+        self.assertEqual(loan.contact, "")
+
+    def test_borrowing_contact_change(self):
+        debt = self.borrow("1000")
+        self.assertEqual(self.patch("borrowings", debt.pk, {"contact": "0700"}).status_code, 200)
+        debt.refresh_from_db()
+        self.assertEqual(debt.contact, "0700")
+
+    def test_web_edit_form_still_has_no_contact_input(self):
+        loan = self.lend_c("Ann", "0700")
+        html = self.client.get(f"/debts/lendings/{loan.pk}/edit/").content.decode()
+        self.assertNotIn('name="contact"', html)
+
+
+class DeleteRepaymentAfterSettlementTests(ApiBase):
+    def test_delete_repayment_then_undo_settlement_stays_consistent(self):
+        loan = self.lend("104000", name="DAKA")
+        rep = ds.record_lending_repayment(user=self.user, lending=loan, principal_amount=D("50000"),
+                                          interest_amount=D("0"), date=FEB, receiving_account=self.bank, notes="")
+        self.borrow("20000", name="DAKA", debt_type="goods_credit", account=None)
+        result = settlements.settle_with_person(user=self.user, name="DAKA", amount=D("20000"), date=TODAY, token=uuid.uuid4())
+        self.assertEqual(self.client.delete(f"/api/v1/lending-repayments/{rep.pk}/").status_code, 204)
+        loan.refresh_from_db()
+        self.assertEqual((loan.outstanding(), self.bal(self.bank)), (D("84000.00"), D("0.00")))
+        settlements.reverse_settlement(user=self.user, settlement_id=result.pk, date=TODAY)
+        loan.refresh_from_db()
+        self.assertEqual(loan.outstanding(), D("104000.00"))  # never above the original amount
+        self.assertEqual(self.bal(self.cash), D("896000.00"))
