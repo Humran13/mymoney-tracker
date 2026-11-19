@@ -6,6 +6,7 @@ app_name = "debts"
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("names/suggest/", views.name_suggest, name="name_suggest"),
     path("settle/", views.settle, name="settle"),
     path("settle/identity/", views.identity_confirm, name="identity"),
     path("settle/identity/unlink/", views.identity_unlink, name="identity_unlink"),
