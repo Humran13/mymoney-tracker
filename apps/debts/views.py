@@ -4,14 +4,14 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.audit import log_audit_event
 
-from . import payments, services, settlements
+from . import payments, people, services, settlements
 from .forms import (
     BorrowingForm,
     BorrowingReclassifyForm,
@@ -52,6 +52,12 @@ def dashboard(request):
             .prefetch_related("lines__borrowing", "lines__lending")[:20],
         },
     )
+
+
+@login_required
+def name_suggest(request):
+    """Remembered names for the autocomplete: this user's records only."""
+    return JsonResponse({"results": people.suggest(request.user, request.GET.get("q", ""))})
 
 
 def _side_or_404(side):

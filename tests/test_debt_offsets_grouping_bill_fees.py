@@ -327,16 +327,21 @@ class PersonGroupingTests(TestCase):
         owe(self.user, self.wallet, "John", "1000")
         self.assertEqual(settlements.debt_positions(self.user)["lenders"][0]["total"], D("1000.00"))
 
-    def test_new_forms_accept_an_optional_contact(self):
+    def test_contact_input_removed_but_stored_contact_is_reused(self):
+        html = self.client.get(reverse("debts:lending_create")).content.decode()
+        self.assertNotIn('name="contact"', html)
+        # Ruth already exists as a lender with a stored contact: typing her name reuses that identity.
+        owe(self.user, self.wallet, "Ruth", "5000", contact="0700")
         response = self.client.post(
             reverse("debts:lending_create"),
             {
-                "borrower_name": "Ruth", "contact": "0700", "amount": "1000", "date_lent": TODAY.isoformat(),
+                "borrower_name": "ruth", "amount": "1000", "date_lent": TODAY.isoformat(),
                 "source_account": self.wallet.pk, "interest_amount": "0",
             },
         )
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(Lending.objects.get().contact, "0700")
+        lending = Lending.objects.get()
+        self.assertEqual((lending.borrower_name, lending.contact), ("Ruth", "0700"))
 
 
 class BillFeeTests(TestCase):

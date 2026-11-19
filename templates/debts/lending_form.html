@@ -7,7 +7,7 @@
   <form method="post" novalidate>
     {% csrf_token %}
     {% include "base/_field.html" with field=form.borrower_name %}
-    {% include "base/_field.html" with field=form.contact %}
+    {{ form.person_contact }}
     {% include "base/_field.html" with field=form.amount %}
     {% include "base/_field.html" with field=form.date_lent %}
     {% include "base/_field.html" with field=form.source_account %}
@@ -17,4 +17,5 @@
     <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save</button>
   </form>
 </div>
+{% include "base/_name_autocomplete.html" with url_name="debts:name_suggest" %}
 {% endblock %}

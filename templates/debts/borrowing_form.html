@@ -9,7 +9,7 @@
     {% include "base/_field.html" with field=form.debt_type %}
     <p id="noncashNotice" class="text-xs text-slate-500 mb-3 hidden">Recording goods or services on credit increases what you owe but does not increase your available cash.</p>
     {% include "base/_field.html" with field=form.lender_name %}
-    {% include "base/_field.html" with field=form.contact %}
+    {{ form.person_contact }}
     {% include "base/_field.html" with field=form.amount %}
     {% include "base/_field.html" with field=form.date_borrowed %}
     <div id="receivingAccountField">
@@ -21,6 +21,7 @@
     <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save</button>
   </form>
 </div>
+{% include "base/_name_autocomplete.html" with url_name="debts:name_suggest" %}
 <script>
   const debtTypeField = document.getElementById('{{ form.debt_type.id_for_label }}');
   const receivingAccountField = document.getElementById('receivingAccountField');

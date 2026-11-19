@@ -22,7 +22,7 @@
     {{ form.expected_count }}{{ form.old_name }}{{ form.old_contact }}
     {% if form.non_field_errors %}<div class="text-sm text-red-600 mb-3" role="alert">{{ form.non_field_errors }}</div>{% endif %}
     {% include "base/_field.html" with field=form.name %}
-    {% include "base/_field.html" with field=form.contact %}
+    {{ form.contact }}
     <p class="text-xs text-slate-500 mb-4">Fixing a name never settles anything by itself. If the corrected name matches someone on the other list, you will be offered Pay (or asked to confirm they are the same person) on the Debts &amp; Loans page.</p>
     <button type="submit" id="submit-btn" class="bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg px-5 py-2.5">Save name</button>
     <a href="{% url 'debts:dashboard' %}" class="ml-2 text-sm text-slate-500">Cancel</a>
