@@ -56,12 +56,13 @@ def compute_monthly_report(user, year, month):
     prev_month_end = start - relativedelta(days=1)
 
     txns = Transaction.objects.filter(user=user, date__gte=start, date__lte=end)
-    income_total = txns.filter(kind="income").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-    expense_principal = txns.filter(kind="expense").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-    fee_total = txns.aggregate(t=Sum("fee_amount"))["t"] or Decimal("0.00")
+    personal_txns = txns.filter(scope=Transaction.Scope.PERSONAL)
+    income_total = personal_txns.filter(kind="income").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+    expense_principal = personal_txns.filter(kind="expense").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+    fee_total = personal_txns.aggregate(t=Sum("fee_amount"))["t"] or Decimal("0.00")
 
     by_category = (
-        txns.filter(kind="expense")
+        personal_txns.filter(kind="expense")
         .values("category__name")
         .annotate(total=Sum("amount"))
         .order_by("-total")

@@ -129,7 +129,7 @@ class TransactionSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
 
     class Meta:
         model = Transaction
-        fields = ["id", "account", "kind", "category", "amount", "fee_amount", "date", "description", "notes"]
+        fields = ["id", "account", "kind", "scope", "category", "amount", "fee_amount", "date", "description", "notes"]
 
     def create(self, validated_data):
         from apps.transactions.services import create_transaction
@@ -148,7 +148,7 @@ class TransactionTemplateSerializer(ScopedFieldsMixin, serializers.ModelSerializ
 
     class Meta:
         model = TransactionTemplate
-        fields = ["id", "name", "kind", "category", "account", "default_amount", "is_favorite", "use_count", "last_used_at"]
+        fields = ["id", "name", "kind", "scope", "category", "account", "default_amount", "is_favorite", "use_count", "last_used_at"]
         read_only_fields = ["id", "use_count", "last_used_at"]
 
     def create(self, validated_data):

@@ -14,6 +14,7 @@ from apps.core.models import AuditEvent
 from apps.reports.cash_flow import period_cash_flow
 from apps.reports.services import compute_monthly_report
 from apps.users.models import User
+from apps.transactions.services import create_transaction
 
 D = Decimal
 TODAY = timezone.localdate()
@@ -134,6 +135,22 @@ class InventoryTests(AccountingWorkflowBase):
         self.assertEqual(report["business_gross_profit"], D("20000"))
         self.assertEqual(report["total_income"], D("0"))
         self.assertEqual(report["total_expenses"], D("0"))
+
+    def test_general_business_expense_is_separate_from_personal_expenses(self):
+        create_transaction(
+            user=self.user, account=self.account, kind="expense", scope="business", category=None,
+            amount=D("25000"), fee_amount=D("500"), date=TODAY, description="Shop rent", notes="",
+        )
+        create_transaction(
+            user=self.user, account=self.account, kind="income", scope="business", category=None,
+            amount=D("40000"), fee_amount=D("0"), date=TODAY, description="Service revenue", notes="",
+        )
+        report = compute_monthly_report(self.user, TODAY.year, TODAY.month)
+        self.assertEqual(report["total_income"], D("0"))
+        self.assertEqual(report["total_expenses"], D("0"))
+        self.assertEqual(report["business_revenue"], D("40000"))
+        self.assertEqual(report["business_operating_expenses"], D("25500"))
+        self.assertEqual(report["business_net_profit"], D("14500"))
 
     def test_oversale_and_overpayment_are_rejected(self):
         lot = services.save_inventory_lot(user=self.user, product_name="x", supplier="", source="local", account=self.account, acquisition_date=TODAY, quantity=D("2"), purchase_cost=D("100"), shipping_cost=0, customs_cost=0, transport_cost=0, notes="")

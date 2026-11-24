@@ -57,7 +57,7 @@
     {% for t in detail.income_transactions %}
     <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
       <div class="flex justify-between gap-2"><span class="min-w-0 break-words">{{ t.description|default:"Income" }}{% if t.category %} · {{ t.category.name }}{% endif %}</span><span class="whitespace-nowrap text-green-700">{{ t.amount|money }}</span></div>
-      <p class="text-xs text-slate-500">{{ t.account.name }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }}{% endif %}</p>
+      <p class="text-xs text-slate-500">{{ t.account.name }} · {{ t.get_scope_display }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }}{% endif %}</p>
     </div>
     {% endfor %}
     {% for b in detail.borrowings_received %}
@@ -82,7 +82,7 @@
     {% for t in detail.expense_transactions %}
     <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
       <div class="flex justify-between gap-2"><span class="min-w-0 break-words">{{ t.description|default:"Expense" }}{% if t.category %} · {{ t.category.name }}{% endif %}</span><span class="whitespace-nowrap text-red-700">{{ t.amount|money }}</span></div>
-      <p class="text-xs text-slate-500">{{ t.account.name }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }} · cash out {{ t.cash_out|money }}{% endif %}</p>
+      <p class="text-xs text-slate-500">{{ t.account.name }} · {{ t.get_scope_display }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }} · cash out {{ t.cash_out|money }}{% endif %}</p>
     </div>
     {% endfor %}
     {% for r in detail.repayments %}

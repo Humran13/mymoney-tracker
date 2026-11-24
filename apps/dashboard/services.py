@@ -200,7 +200,7 @@ def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
         granularity = "month"
 
     labels, totals = [], []
-    base_qs = Transaction.objects.filter(user=user, kind="expense")
+    base_qs = Transaction.objects.filter(user=user, kind="expense", scope=Transaction.Scope.PERSONAL)
 
     if granularity == "day":
         d = start_date

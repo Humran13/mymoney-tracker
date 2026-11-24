@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db.models import Sum
 
 from .models import HeldFundEntry, InventoryLot, InventorySale, InventorySalePayment, ReimbursementClaim, ReimbursementPayment
+from apps.transactions.models import Transaction
 
 ZERO = Decimal("0.00")
 
@@ -18,14 +19,17 @@ def period_summary(user, start, end):
     lots = InventoryLot.objects.filter(user=user, reversed_at__isnull=True, acquisition_date__range=(start, end))
     sales = InventorySale.objects.filter(user=user, reversed_at__isnull=True, sale_date__range=(start, end)).select_related("lot")
     sale_payments = InventorySalePayment.objects.filter(user=user, reversed_at__isnull=True, date__range=(start, end))
+    business_txns = Transaction.objects.filter(user=user, scope=Transaction.Scope.BUSINESS, date__range=(start, end))
 
     personal_agency_fees = _sum(held.filter(fee_bearer=HeldFundEntry.FeeBearer.USER), "fee_amount")
     personal_reimbursement_fees = _sum(claims.filter(fee_bearer=HeldFundEntry.FeeBearer.USER), "fee_amount")
     personal_reimbursement_fees += _sum(reimbursements.filter(fee_bearer=HeldFundEntry.FeeBearer.USER), "fee_amount")
     reimbursement_losses = _sum(reimbursements, "unrecovered_amount")
     business_revenue = sum((sale.sale_amount for sale in sales), ZERO)
+    business_revenue += _sum(business_txns.filter(kind=Transaction.Kind.INCOME), "amount")
     cogs = sum((sale.cost_of_goods_sold for sale in sales), ZERO)
-    business_fees = _sum(sale_payments, "fee_amount")
+    business_fees = _sum(sale_payments, "fee_amount") + _sum(business_txns, "fee_amount")
+    business_operating = _sum(business_txns.filter(kind=Transaction.Kind.EXPENSE), "amount") + business_fees
 
     return {
         "held_received": _sum(held.filter(kind=HeldFundEntry.Kind.RECEIPT), "amount"),
@@ -37,9 +41,9 @@ def period_summary(user, start, end):
         "inventory_purchases": sum((lot.landed_cost for lot in lots), ZERO),
         "business_revenue": business_revenue,
         "cost_of_goods_sold": cogs,
-        "business_operating_expenses": business_fees,
+        "business_operating_expenses": business_operating,
         "business_gross_profit": business_revenue - cogs,
-        "business_net_profit": business_revenue - cogs - business_fees,
+        "business_net_profit": business_revenue - cogs - business_operating,
         "additional_personal_expenses": personal_agency_fees + personal_reimbursement_fees + reimbursement_losses,
     }
 

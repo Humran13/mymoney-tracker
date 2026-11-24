@@ -291,9 +291,10 @@ def accrual_summary(user, start, end) -> dict:
     it isn't new spending); repayment transaction fees are included once.
     """
     txns = Transaction.objects.filter(user=user, date__gte=start, date__lte=end)
-    income = txns.filter(kind=Transaction.Kind.INCOME).aggregate(t=Sum("amount"))["t"] or ZERO
-    expense_principal = txns.filter(kind=Transaction.Kind.EXPENSE).aggregate(t=Sum("amount"))["t"] or ZERO
-    txn_fees = txns.aggregate(t=Sum("fee_amount"))["t"] or ZERO
+    personal_txns = txns.filter(scope=Transaction.Scope.PERSONAL)
+    income = personal_txns.filter(kind=Transaction.Kind.INCOME).aggregate(t=Sum("amount"))["t"] or ZERO
+    expense_principal = personal_txns.filter(kind=Transaction.Kind.EXPENSE).aggregate(t=Sum("amount"))["t"] or ZERO
+    txn_fees = personal_txns.aggregate(t=Sum("fee_amount"))["t"] or ZERO
     repayment_fees = (
         BorrowingRepayment.objects.filter(user=user, date__gte=start, date__lte=end).aggregate(t=Sum("fee_amount"))["t"]
         or ZERO
@@ -363,7 +364,7 @@ def day_detail(user, day) -> dict:
 
     by_category = {}
     for txn in transactions:
-        if txn.kind != Transaction.Kind.EXPENSE:
+        if txn.kind != Transaction.Kind.EXPENSE or txn.scope != Transaction.Scope.PERSONAL:
             continue
         key = txn.category.name if txn.category else "Uncategorized"
         by_category[key] = by_category.get(key, ZERO) + txn.amount
