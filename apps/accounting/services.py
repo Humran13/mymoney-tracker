@@ -101,16 +101,21 @@ def _held_specs(entry):
     return specs
 
 
-def _held_available(fund, exclude=None):
-    total = fund.outstanding()
-    if exclude and not exclude.is_reversed:
-        if exclude.kind == HeldFundEntry.Kind.RECEIPT:
-            total -= exclude.amount
+def _validate_held_history(fund):
+    balance = ZERO
+    entries = fund.entries.filter(reversed_at__isnull=True).order_by("date", "id")
+    for entry in entries:
+        if entry.kind == HeldFundEntry.Kind.RECEIPT:
+            balance += entry.amount
         else:
-            total += exclude.amount
-        if exclude.fee_bearer == HeldFundEntry.FeeBearer.OWNER:
-            total += exclude.fee_amount
-    return total
+            balance -= entry.amount
+        if entry.fee_bearer == HeldFundEntry.FeeBearer.OWNER:
+            balance -= entry.fee_amount
+        if balance < ZERO:
+            raise ValidationError(
+                "This change would make held funds negative at an earlier point in the accounting history."
+            )
+    return balance
 
 
 @transaction.atomic
@@ -118,7 +123,20 @@ def save_held_entry(*, user, actor=None, instance=None, **fields):
     operation_key = fields.pop("operation_key", None)
     if instance is None:
         _claim_operation(user, operation_key, "held_fund_entry")
-    fund = HeldFund.objects.select_for_update().get(pk=fields.get("fund", getattr(instance, "fund", None)).pk, user=user)
+    requested_fund = fields.get("fund", getattr(instance, "fund", None))
+    requested_fund_id = requested_fund.pk
+    fund_ids = {requested_fund_id}
+    if instance is not None:
+        fund_ids.add(instance.fund_id)
+    funds = {
+        fund.pk: fund
+        for fund in HeldFund.objects.select_for_update().filter(pk__in=fund_ids, user=user).order_by("pk")
+    }
+    if set(funds) != fund_ids:
+        raise ValidationError("The held-funds record does not belong to this user.")
+    for locked_fund in funds.values():
+        list(locked_fund.entries.select_for_update().filter(reversed_at__isnull=True).order_by("pk"))
+    fund = funds[requested_fund_id]
     account = fields.get("account", getattr(instance, "account", None))
     day = fields.get("date", getattr(instance, "date", None))
     _account_date(account, day, user)
@@ -134,10 +152,9 @@ def save_held_entry(*, user, actor=None, instance=None, **fields):
         before = None
     entry.fund = fund
     entry.full_clean()
-    liability_use = entry.amount + (entry.fee_amount if entry.fee_bearer == HeldFundEntry.FeeBearer.OWNER else ZERO)
-    if entry.kind == HeldFundEntry.Kind.DISTRIBUTION and liability_use > _held_available(fund, instance):
-        raise ValidationError("Distribution and owner-borne fees cannot exceed funds currently held.")
     entry.save()
+    for locked_fund in funds.values():
+        _validate_held_history(locked_fund)
     sync_postings(entry, _held_specs(entry), user=user)
     _audit(actor or user, "update" if instance else "create", entry, "Edited held-funds movement" if instance else "Recorded held-funds movement", before)
     return entry
@@ -169,7 +186,12 @@ def update_reimbursement(claim, *, actor=None, **fields):
         setattr(claim, key, value)
     _account_date(claim.account, claim.purchase_date, claim.user)
     _positive(claim.purchase_amount)
-    if claim.original_receivable() < sum((p.amount + p.unrecovered_amount for p in claim.payments.filter(reversed_at__isnull=True)), ZERO):
+    payments = claim.payments.filter(reversed_at__isnull=True)
+    settled = sum((p.amount + p.unrecovered_amount for p in payments), ZERO)
+    owner_fees = sum(
+        (p.fee_amount for p in payments if p.fee_bearer == HeldFundEntry.FeeBearer.OWNER), ZERO
+    )
+    if claim.original_receivable() + owner_fees - settled < ZERO:
         raise ValidationError("The purchase cannot be reduced below reimbursements and write-offs already recorded.")
     claim.full_clean()
     claim.save()
@@ -189,7 +211,12 @@ def save_reimbursement_payment(*, user, actor=None, instance=None, **fields):
     operation_key = fields.pop("operation_key", None)
     if instance is None:
         _claim_operation(user, operation_key, "reimbursement_payment")
-    claim = ReimbursementClaim.objects.select_for_update().get(pk=fields.get("claim", getattr(instance, "claim", None)).pk, user=user, reversed_at__isnull=True)
+    requested_claim = fields.get("claim", getattr(instance, "claim", None))
+    if instance is not None and requested_claim.pk != instance.claim_id:
+        raise ValidationError("An existing reimbursement payment cannot be moved to another claim.")
+    claim = ReimbursementClaim.objects.select_for_update().get(
+        pk=requested_claim.pk, user=user, reversed_at__isnull=True
+    )
     account = fields.get("account", getattr(instance, "account", None))
     day = fields.get("date", getattr(instance, "date", None))
     _account_date(account, day, user)
@@ -198,20 +225,23 @@ def save_reimbursement_payment(*, user, actor=None, instance=None, **fields):
     _nonnegative(fields.get("fee_amount", getattr(instance, "fee_amount", ZERO)), "Fee")
     if instance:
         payment = ReimbursementPayment.objects.select_for_update().get(pk=instance.pk, user=user, reversed_at__isnull=True)
-        available = claim.outstanding() + payment.amount + payment.unrecovered_amount
+        if payment.claim_id != claim.id:
+            raise ValidationError("An existing reimbursement payment cannot be moved to another claim.")
+        base_outstanding = claim.outstanding() + payment.amount + payment.unrecovered_amount
         if payment.fee_bearer == HeldFundEntry.FeeBearer.OWNER:
-            available -= payment.fee_amount
+            base_outstanding -= payment.fee_amount
         before = _snapshot(payment)
         for key, value in fields.items():
             setattr(payment, key, value)
     else:
         payment = ReimbursementPayment(user=user, **fields)
-        available = claim.outstanding()
+        base_outstanding = claim.outstanding()
         before = None
     payment.claim = claim
+    projected_outstanding = base_outstanding - payment.amount - payment.unrecovered_amount
     if payment.fee_bearer == HeldFundEntry.FeeBearer.OWNER:
-        available += payment.fee_amount
-    if payment.amount + payment.unrecovered_amount > available:
+        projected_outstanding += payment.fee_amount
+    if projected_outstanding < ZERO:
         raise ValidationError("Reimbursement and write-off cannot exceed the outstanding receivable.")
     payment.full_clean()
     payment.save()
@@ -265,23 +295,30 @@ def save_inventory_sale(*, user, actor=None, instance=None, **fields):
     operation_key = fields.pop("operation_key", None)
     if instance is None:
         _claim_operation(user, operation_key, "inventory_sale")
-    lot = InventoryLot.objects.select_for_update().get(pk=fields.get("lot", getattr(instance, "lot", None)).pk, user=user, reversed_at__isnull=True)
+    requested_lot = fields.get("lot", getattr(instance, "lot", None))
+    if instance is not None and requested_lot.pk != instance.lot_id:
+        raise ValidationError("An existing inventory sale cannot be moved to another inventory lot.")
+    lot = InventoryLot.objects.select_for_update().get(
+        pk=requested_lot.pk, user=user, reversed_at__isnull=True
+    )
     _positive(fields.get("quantity", getattr(instance, "quantity", None)), "Quantity")
     _positive(fields.get("sale_amount", getattr(instance, "sale_amount", None)), "Sale amount")
     if instance:
         sale = InventorySale.objects.select_for_update().get(pk=instance.pk, user=user, reversed_at__isnull=True)
-        available = lot.quantity_remaining() + (sale.quantity if sale.lot_id == lot.id else Decimal("0.000"))
+        if sale.lot_id != lot.id:
+            raise ValidationError("An existing inventory sale cannot be moved to another inventory lot.")
+        available = lot.quantity_remaining() + sale.quantity
         before = _snapshot(sale)
         for key, value in fields.items():
             setattr(sale, key, value)
-        if sale.sale_amount < sale.amount_paid():
+        if sale.sale_amount - sale.amount_paid() < ZERO:
             raise ValidationError("Sale amount cannot be reduced below payments already received.")
     else:
         sale = InventorySale(user=user, **fields)
         available = lot.quantity_remaining()
         before = None
     sale.lot = lot
-    if sale.quantity > available:
+    if available - sale.quantity < Decimal("0.000"):
         raise ValidationError("Sale quantity exceeds inventory currently available.")
     sale.full_clean()
     sale.save()
@@ -294,7 +331,12 @@ def save_sale_payment(*, user, actor=None, instance=None, **fields):
     operation_key = fields.pop("operation_key", None)
     if instance is None:
         _claim_operation(user, operation_key, "inventory_sale_payment")
-    sale = InventorySale.objects.select_for_update().get(pk=fields.get("sale", getattr(instance, "sale", None)).pk, user=user, reversed_at__isnull=True)
+    requested_sale = fields.get("sale", getattr(instance, "sale", None))
+    if instance is not None and requested_sale.pk != instance.sale_id:
+        raise ValidationError("An existing customer payment cannot be moved to another sale.")
+    sale = InventorySale.objects.select_for_update().get(
+        pk=requested_sale.pk, user=user, reversed_at__isnull=True
+    )
     account = fields.get("account", getattr(instance, "account", None))
     day = fields.get("date", getattr(instance, "date", None))
     _account_date(account, day, user)
@@ -302,16 +344,18 @@ def save_sale_payment(*, user, actor=None, instance=None, **fields):
     _nonnegative(fields.get("fee_amount", getattr(instance, "fee_amount", ZERO)), "Fee")
     if instance:
         payment = InventorySalePayment.objects.select_for_update().get(pk=instance.pk, user=user, reversed_at__isnull=True)
-        available = sale.outstanding() + payment.amount
+        if payment.sale_id != sale.id:
+            raise ValidationError("An existing customer payment cannot be moved to another sale.")
+        base_outstanding = sale.outstanding() + payment.amount
         before = _snapshot(payment)
         for key, value in fields.items():
             setattr(payment, key, value)
     else:
         payment = InventorySalePayment(user=user, **fields)
-        available = sale.outstanding()
+        base_outstanding = sale.outstanding()
         before = None
     payment.sale = sale
-    if payment.amount > available:
+    if base_outstanding - payment.amount < ZERO:
         raise ValidationError("Payment cannot exceed the customer's outstanding balance.")
     payment.full_clean()
     payment.save()
@@ -328,6 +372,10 @@ def save_sale_payment(*, user, actor=None, instance=None, **fields):
 @transaction.atomic
 def reverse(obj, *, actor, reason):
     model = type(obj)
+    held_fund = None
+    if isinstance(obj, HeldFundEntry):
+        held_fund = HeldFund.objects.select_for_update().get(pk=obj.fund_id, user=actor)
+        list(held_fund.entries.select_for_update().filter(reversed_at__isnull=True).order_by("pk"))
     locked = model.objects.select_for_update().get(pk=obj.pk, user=actor, reversed_at__isnull=True)
     before = _snapshot(locked)
     if isinstance(locked, InventoryLot) and locked.sales.filter(reversed_at__isnull=True).exists():
@@ -339,6 +387,8 @@ def reverse(obj, *, actor, reason):
     locked.reversed_at = timezone.now()
     locked.reversal_reason = reason
     locked.save(update_fields=["reversed_at", "reversal_reason", "updated_at"])
+    if held_fund is not None:
+        _validate_held_history(held_fund)
     delete_postings(locked)
     _audit(actor, "update", locked, f"Reversed {model._meta.verbose_name}", before)
     return locked

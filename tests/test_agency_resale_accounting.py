@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
 import uuid
@@ -31,6 +32,16 @@ class AccountingWorkflowBase(TestCase):
 
     def balance(self):
         return account_balance(FinancialAccount.objects.get(pk=self.account.pk))
+
+    def posting_state(self):
+        return list(
+            AccountPosting.objects.filter(user=self.user)
+            .order_by("pk")
+            .values(
+                "pk", "account_id", "amount", "source_type", "occurred_on",
+                "content_type_id", "object_id",
+            )
+        )
 
     def held_fund(self):
         return services.create_held_fund(user=self.user, owner_name="Community Group", purpose="Charity", notes="")
@@ -88,6 +99,86 @@ class HeldFundsTests(AccountingWorkflowBase):
         self.assertEqual(self.balance(), D("1000000"))
         self.assertTrue(AuditEvent.objects.filter(object_type="HeldFundEntry", metadata__before__isnull=False).exists())
 
+    def test_backdated_distribution_and_fund_moves_preserve_chronological_liability(self):
+        first = self.held_fund()
+        second = services.create_held_fund(user=self.user, owner_name="Second owner")
+        receipt = services.save_held_entry(
+            user=self.user, fund=first, kind="receipt", account=self.account, amount=D("100"),
+            fee_amount=0, fee_bearer="owner", date=TODAY - timedelta(days=1), description="", notes="",
+        )
+        distribution = services.save_held_entry(
+            user=self.user, fund=first, kind="distribution", account=self.account, amount=D("80"),
+            fee_amount=0, fee_bearer="owner", date=TODAY, description="", notes="",
+        )
+        second_receipt = services.save_held_entry(
+            user=self.user, fund=second, kind="receipt", account=self.account, amount=D("20"),
+            fee_amount=0, fee_bearer="owner", date=TODAY - timedelta(days=1), description="", notes="",
+        )
+        before_postings = self.posting_state()
+        before_balance = self.balance()
+
+        with self.assertRaises(ValidationError):
+            services.save_held_entry(
+                user=self.user, fund=first, kind="distribution", account=self.account, amount=D("10"),
+                fee_amount=0, fee_bearer="owner", date=TODAY - timedelta(days=2), description="", notes="",
+            )
+        with self.assertRaises(ValidationError):
+            services.save_held_entry(
+                user=self.user, instance=receipt, fund=second, kind="receipt", account=self.account,
+                amount=D("100"), fee_amount=0, fee_bearer="owner", date=receipt.date,
+                description="", notes="",
+            )
+        with self.assertRaises(ValidationError):
+            services.save_held_entry(
+                user=self.user, instance=distribution, fund=second, kind="distribution", account=self.account,
+                amount=D("80"), fee_amount=0, fee_bearer="owner", date=distribution.date,
+                description="", notes="",
+            )
+
+        receipt.refresh_from_db()
+        distribution.refresh_from_db()
+        second_receipt.refresh_from_db()
+        self.assertEqual(receipt.fund_id, first.id)
+        self.assertEqual(distribution.fund_id, first.id)
+        self.assertEqual(first.outstanding(), D("20"))
+        self.assertEqual(second.outstanding(), D("20"))
+        self.assertEqual(self.posting_state(), before_postings)
+        self.assertEqual(self.balance(), before_balance)
+
+    def test_receipt_reduction_and_reversal_are_rejected_by_web_and_api_atomically(self):
+        fund = self.held_fund()
+        receipt = services.save_held_entry(
+            user=self.user, fund=fund, kind="receipt", account=self.account, amount=D("100"),
+            fee_amount=0, fee_bearer="owner", date=TODAY - timedelta(days=1), description="", notes="",
+        )
+        services.save_held_entry(
+            user=self.user, fund=fund, kind="distribution", account=self.account, amount=D("80"),
+            fee_amount=0, fee_bearer="owner", date=TODAY, description="", notes="",
+        )
+        before_postings = self.posting_state()
+        before_balance = self.balance()
+        self.client.force_login(self.user)
+
+        response = self.client.patch(
+            f"/api/v1/held-fund-entries/{receipt.pk}/", {"amount": "70.00"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+        response = self.client.post(
+            f"/accounting/reverse/held-entry/{receipt.pk}/", {"reason": "Invalid reversal"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "negative at an earlier point")
+        response = self.client.delete(f"/api/v1/held-fund-entries/{receipt.pk}/")
+        self.assertEqual(response.status_code, 400, response.content)
+
+        receipt.refresh_from_db()
+        self.assertEqual(receipt.amount, D("100"))
+        self.assertIsNone(receipt.reversed_at)
+        self.assertEqual(fund.outstanding(), D("20"))
+        self.assertEqual(self.posting_state(), before_postings)
+        self.assertEqual(self.balance(), before_balance)
+
 
 class ReimbursementTests(AccountingWorkflowBase):
     def test_purchase_partial_reimbursement_and_unrecovered_amount(self):
@@ -111,6 +202,95 @@ class ReimbursementTests(AccountingWorkflowBase):
         with self.assertRaises(ValidationError):
             services.save_reimbursement_payment(user=self.user, claim=claim, account=self.account, amount=D("10001"), unrecovered_amount=0, fee_amount=0, fee_bearer="user", date=TODAY, notes="")
         self.assertEqual(claim.payments.count(), 0)
+
+    def test_api_cannot_reassign_existing_payment_or_use_its_balance_on_another_claim(self):
+        first = services.create_reimbursement(
+            user=self.user, responsible_party="A", account=self.account, purchase_amount=D("100"),
+            fee_amount=0, fee_bearer="user", purchase_date=TODAY, description="A", receipt_reference="", notes="",
+        )
+        second = services.create_reimbursement(
+            user=self.user, responsible_party="B", account=self.account, purchase_amount=D("100"),
+            fee_amount=0, fee_bearer="user", purchase_date=TODAY, description="B", receipt_reference="", notes="",
+        )
+        payment = services.save_reimbursement_payment(
+            user=self.user, claim=first, account=self.account, amount=D("60"), unrecovered_amount=0,
+            fee_amount=0, fee_bearer="user", date=TODAY, notes="",
+        )
+        before_postings = self.posting_state()
+        before_balance = self.balance()
+        self.client.force_login(self.user)
+
+        response = self.client.patch(
+            f"/api/v1/reimbursement-payments/{payment.pk}/",
+            {"claim": second.pk, "amount": "120.00"}, content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+
+        other = User.objects.create_user(email="claim-owner@example.com", password="StrongPass123!")
+        other_account = FinancialAccount.objects.create(
+            user=other, name="Other", opening_balance=0, opening_balance_date=START,
+        )
+        foreign = services.create_reimbursement(
+            user=other, responsible_party="Foreign", account=other_account, purchase_amount=D("100"),
+            fee_amount=0, fee_bearer="user", purchase_date=TODAY, description="Foreign",
+            receipt_reference="", notes="",
+        )
+        response = self.client.patch(
+            f"/api/v1/reimbursement-payments/{payment.pk}/", {"claim": foreign.pk},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+
+        payment.refresh_from_db()
+        self.assertEqual(payment.claim_id, first.pk)
+        self.assertEqual(payment.amount, D("60"))
+        self.assertEqual(first.outstanding(), D("40"))
+        self.assertEqual(second.outstanding(), D("100"))
+        self.assertEqual(self.posting_state(), before_postings)
+        self.assertEqual(self.balance(), before_balance)
+
+    def test_web_rejects_payment_and_claim_edits_that_make_outstanding_negative(self):
+        claim = services.create_reimbursement(
+            user=self.user, responsible_party="A", account=self.account, purchase_amount=D("100"),
+            fee_amount=0, fee_bearer="user", purchase_date=TODAY, description="A", receipt_reference="", notes="",
+        )
+        payment = services.save_reimbursement_payment(
+            user=self.user, claim=claim, account=self.account, amount=D("60"), unrecovered_amount=0,
+            fee_amount=0, fee_bearer="user", date=TODAY, notes="",
+        )
+        before_postings = self.posting_state()
+        before_balance = self.balance()
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            f"/accounting/reimbursements/{claim.pk}/payment/{payment.pk}/edit/",
+            {
+                "account": self.account.pk, "amount": "101.00", "unrecovered_amount": "0.00",
+                "fee_amount": "0.00", "fee_bearer": "user", "date": TODAY.isoformat(),
+                "notes": "", "operation_key": str(uuid.uuid4()),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot exceed the outstanding receivable")
+        response = self.client.post(
+            f"/accounting/reimbursements/{claim.pk}/edit/",
+            {
+                "responsible_party": "A", "account": self.account.pk, "purchase_amount": "50.00",
+                "fee_amount": "0.00", "fee_bearer": "user", "purchase_date": TODAY.isoformat(),
+                "description": "A", "receipt_reference": "", "notes": "",
+                "operation_key": str(uuid.uuid4()),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot be reduced below reimbursements")
+
+        claim.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(claim.purchase_amount, D("100"))
+        self.assertEqual(payment.amount, D("60"))
+        self.assertEqual(claim.outstanding(), D("40"))
+        self.assertEqual(self.posting_state(), before_postings)
+        self.assertEqual(self.balance(), before_balance)
 
 
 class InventoryTests(AccountingWorkflowBase):
@@ -159,6 +339,115 @@ class InventoryTests(AccountingWorkflowBase):
         sale = services.save_inventory_sale(user=self.user, lot=lot, customer="", sale_date=TODAY, quantity=D("1"), sale_amount=D("100"), notes="")
         with self.assertRaises(ValidationError):
             services.save_sale_payment(user=self.user, sale=sale, account=self.account, amount=D("101"), fee_amount=0, date=TODAY, notes="")
+
+    def test_api_cannot_reassign_sale_or_customer_payment_parents(self):
+        first_lot = services.save_inventory_lot(
+            user=self.user, product_name="First", supplier="", source="local", account=self.account,
+            acquisition_date=TODAY, quantity=D("2"), purchase_cost=D("100"), shipping_cost=0,
+            customs_cost=0, transport_cost=0, notes="",
+        )
+        second_lot = services.save_inventory_lot(
+            user=self.user, product_name="Second", supplier="", source="local", account=self.account,
+            acquisition_date=TODAY, quantity=D("2"), purchase_cost=D("100"), shipping_cost=0,
+            customs_cost=0, transport_cost=0, notes="",
+        )
+        first_sale = services.save_inventory_sale(
+            user=self.user, lot=first_lot, customer="A", sale_date=TODAY,
+            quantity=D("1"), sale_amount=D("100"), notes="",
+        )
+        second_sale = services.save_inventory_sale(
+            user=self.user, lot=second_lot, customer="B", sale_date=TODAY,
+            quantity=D("1"), sale_amount=D("100"), notes="",
+        )
+        payment = services.save_sale_payment(
+            user=self.user, sale=first_sale, account=self.account, amount=D("60"),
+            fee_amount=0, date=TODAY, notes="",
+        )
+        before_postings = self.posting_state()
+        before_balance = self.balance()
+        self.client.force_login(self.user)
+
+        response = self.client.patch(
+            f"/api/v1/inventory-sale-payments/{payment.pk}/",
+            {"sale": second_sale.pk, "amount": "120.00"}, content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+        response = self.client.patch(
+            f"/api/v1/inventory-sales/{first_sale.pk}/", {"lot": second_lot.pk},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+
+        other = User.objects.create_user(email="inventory-owner@example.com", password="StrongPass123!")
+        other_account = FinancialAccount.objects.create(
+            user=other, name="Other", opening_balance=0, opening_balance_date=START,
+        )
+        foreign_lot = services.save_inventory_lot(
+            user=other, product_name="Foreign", supplier="", source="local", account=other_account,
+            acquisition_date=TODAY, quantity=D("1"), purchase_cost=D("10"), shipping_cost=0,
+            customs_cost=0, transport_cost=0, notes="",
+        )
+        response = self.client.patch(
+            f"/api/v1/inventory-sales/{first_sale.pk}/", {"lot": foreign_lot.pk},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+
+        first_sale.refresh_from_db()
+        payment.refresh_from_db()
+        self.assertEqual(first_sale.lot_id, first_lot.pk)
+        self.assertEqual(payment.sale_id, first_sale.pk)
+        self.assertEqual(payment.amount, D("60"))
+        self.assertEqual(first_sale.outstanding(), D("40"))
+        self.assertEqual(first_lot.quantity_remaining(), D("1"))
+        self.assertEqual(second_lot.quantity_remaining(), D("1"))
+        self.assertEqual(self.posting_state(), before_postings)
+        self.assertEqual(self.balance(), before_balance)
+
+    def test_web_rejects_negative_sale_balance_and_invalid_inventory_quantity(self):
+        lot = services.save_inventory_lot(
+            user=self.user, product_name="Stock", supplier="", source="local", account=self.account,
+            acquisition_date=TODAY, quantity=D("2"), purchase_cost=D("100"), shipping_cost=0,
+            customs_cost=0, transport_cost=0, notes="",
+        )
+        sale = services.save_inventory_sale(
+            user=self.user, lot=lot, customer="A", sale_date=TODAY,
+            quantity=D("1"), sale_amount=D("100"), notes="",
+        )
+        services.save_sale_payment(
+            user=self.user, sale=sale, account=self.account, amount=D("60"),
+            fee_amount=0, date=TODAY, notes="",
+        )
+        before_postings = self.posting_state()
+        before_balance = self.balance()
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            f"/accounting/sales/{sale.pk}/edit/",
+            {
+                "customer": "A", "sale_date": TODAY.isoformat(), "quantity": "1.000",
+                "sale_amount": "50.00", "notes": "", "operation_key": str(uuid.uuid4()),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot be reduced below payments")
+        response = self.client.post(
+            f"/accounting/sales/{sale.pk}/edit/",
+            {
+                "customer": "A", "sale_date": TODAY.isoformat(), "quantity": "3.000",
+                "sale_amount": "100.00", "notes": "", "operation_key": str(uuid.uuid4()),
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "exceeds inventory currently available")
+
+        sale.refresh_from_db()
+        self.assertEqual(sale.sale_amount, D("100"))
+        self.assertEqual(sale.quantity, D("1"))
+        self.assertEqual(sale.outstanding(), D("40"))
+        self.assertEqual(lot.quantity_remaining(), D("1"))
+        self.assertEqual(self.posting_state(), before_postings)
+        self.assertEqual(self.balance(), before_balance)
 
 
 class IntegrityAndInterfaceTests(AccountingWorkflowBase):
