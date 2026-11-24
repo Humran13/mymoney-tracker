@@ -43,12 +43,12 @@
 
 <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
   <div class="bg-green-50 border border-green-200 rounded-xl p-4">
-    <p class="text-xs text-green-700">Income / Money in</p>
+    <p class="text-xs text-green-700">Cash received</p>
     <p class="text-2xl font-bold text-green-700">{{ cash.received|money }}</p>
     <p class="text-xs text-green-800/70 mt-1">Cash that actually reached your accounts</p>
   </div>
   <div class="bg-red-50 border border-red-200 rounded-xl p-4">
-    <p class="text-xs text-red-700">Expenses / Money out</p>
+    <p class="text-xs text-red-700">Cash paid out</p>
     <p class="text-2xl font-bold text-red-700">{{ cash.spent|money }}</p>
     <p class="text-xs text-red-800/70 mt-1">Cash that actually left your accounts</p>
   </div>
@@ -58,7 +58,7 @@
       {% if cash.difference > 0 %}+{% endif %}{{ cash.difference|money }}
     </p>
     <p class="text-xs mt-1 {% if cash.difference < 0 %}text-red-800/70{% elif cash.difference > 0 %}text-green-800/70{% else %}text-slate-500{% endif %}">
-      {% if cash.difference < 0 %}Spending more than received{% elif cash.difference > 0 %}Received more than spent{% else %}Received and spent are equal{% endif %}
+      {% if cash.difference < 0 %}More cash paid than received{% elif cash.difference > 0 %}More cash received than paid{% else %}Cash received and paid are equal{% endif %}
     </p>
   </div>
 </div>
@@ -74,6 +74,9 @@
     <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50"><span>Earned income</span><span>{{ cash.income_total|money }}</span></div>
     <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50"><span>Cash loans received (not income)</span><span>{{ cash.loan_receipt_total|money }}</span></div>
     <div class="flex justify-between text-sm py-1"><span>Repayments received from people you lent to</span><span>{{ cash.lending_received_total|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Funds received for others (not income)</span><span>{{ cash.held_received_total|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Reimbursements received (not income)</span><span>{{ cash.reimbursement_received_total|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Customer sale payments</span><span>{{ cash.sale_receipt_total|money }}</span></div>
     <p class="text-xs text-slate-500 mt-3">Internal transfers between your own accounts are left out of both sides — moving your own money can't make you richer.</p>
   </div>
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
@@ -82,6 +85,9 @@
     <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50"><span>Bank / mobile money fees</span><span>{{ cash.fee_total|money }}</span></div>
     <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50"><span>Debt repayments (settling old debts, not new spending)</span><span>{{ cash.debt_repayment_total|money }}</span></div>
     <div class="flex justify-between text-sm py-1"><span>Money lent out</span><span>{{ cash.lending_sent_total|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Funds distributed for others (not an expense)</span><span>{{ cash.held_distributed_total|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Reimbursable purchases (receivable, not an expense)</span><span>{{ cash.reimbursable_purchase_total|money }}</span></div>
+    <div class="flex justify-between text-sm py-1"><span>Inventory purchases (asset, not an expense)</span><span>{{ cash.inventory_purchase_total|money }}</span></div>
   </div>
 </div>
 
@@ -112,7 +118,7 @@
   <table class="w-full text-sm">
     <thead>
       <tr class="text-left text-xs text-slate-500 border-b border-slate-200 dark:border-slate-700">
-        <th class="py-2 pr-2">Date</th><th class="py-2 pr-2 text-right">Received</th><th class="py-2 pr-2 text-right">Spent</th><th class="py-2 text-right">Difference</th>
+        <th class="py-2 pr-2">Date</th><th class="py-2 pr-2 text-right">Cash received</th><th class="py-2 pr-2 text-right">Cash paid out</th><th class="py-2 text-right">Difference</th>
       </tr>
     </thead>
     <tbody>
@@ -146,7 +152,7 @@
   <table class="w-full text-sm">
     <thead>
       <tr class="text-left text-xs text-slate-500 border-b border-slate-200 dark:border-slate-700">
-        <th class="py-2 pr-2">Week</th><th class="py-2 pr-2 text-right">Received</th><th class="py-2 pr-2 text-right">Spent</th><th class="py-2 text-right">Difference</th>
+        <th class="py-2 pr-2">Week</th><th class="py-2 pr-2 text-right">Cash received</th><th class="py-2 pr-2 text-right">Cash paid out</th><th class="py-2 text-right">Difference</th>
       </tr>
     </thead>
     <tbody>

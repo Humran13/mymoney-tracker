@@ -66,7 +66,7 @@ def frequent_descriptions(user, kind=None, limit=8):
     if kind:
         qs = qs.filter(kind=kind)
     return (
-        qs.values("description", "category_id", "account_id", "kind")
+        qs.values("description", "category_id", "account_id", "kind", "scope")
         .annotate(frequency=Count("id"), last_used=Max("date"), avg_amount=Max("amount"))
         .order_by("-frequency", "-last_used")[:limit]
     )

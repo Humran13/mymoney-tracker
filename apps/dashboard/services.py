@@ -14,6 +14,7 @@ from apps.debts.models import Borrowing, Lending
 from apps.goals.models import SavingsGoal
 from apps.goals.services import savings_target_calculator
 from apps.reports.services import compute_monthly_report
+from apps.accounting.reporting import period_summary
 
 ANALYSIS_URL_NAME = "reports:income_vs_expenses"
 
@@ -199,12 +200,13 @@ def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
         granularity = "month"
 
     labels, totals = [], []
-    base_qs = Transaction.objects.filter(user=user, kind="expense")
+    base_qs = Transaction.objects.filter(user=user, kind="expense", scope=Transaction.Scope.PERSONAL)
 
     if granularity == "day":
         d = start_date
         while d <= end_date:
             total = base_qs.filter(date=d).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            total += period_summary(user, d, d)["additional_personal_expenses"]
             labels.append("Today" if period == "24h" else d.strftime("%d %b"))
             totals.append(float(total))
             d += timedelta(days=1)
@@ -214,6 +216,7 @@ def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
         while cur <= end_month:
             bucket_end = min(cur + relativedelta(months=1, days=-1), end_date)
             total = base_qs.filter(date__gte=cur, date__lte=bucket_end).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            total += period_summary(user, cur, bucket_end)["additional_personal_expenses"]
             labels.append(cur.strftime("%b %Y"))
             totals.append(float(total))
             cur += relativedelta(months=1)
@@ -222,6 +225,7 @@ def spending_trend(user, period=TREND_DEFAULT_PERIOD, start=None, end=None):
             bucket_start = max(date(year, 1, 1), start_date)
             bucket_end = min(date(year, 12, 31), end_date)
             total = base_qs.filter(date__gte=bucket_start, date__lte=bucket_end).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
+            total += period_summary(user, bucket_start, bucket_end)["additional_personal_expenses"]
             labels.append(str(year))
             totals.append(float(total))
 
@@ -281,6 +285,12 @@ def compute_dashboard(user, month_param=None):
         "monthly_income": report["total_income"],
         "monthly_expenses": report["total_expenses"],
         "monthly_difference": report["total_income"] - report["total_expenses"],
+        "business_revenue": report["business_revenue"],
+        "business_cogs": report["cost_of_goods_sold"],
+        "business_gross_profit": report["business_gross_profit"],
+        "held_funds_liability": report["held_funds_liability"],
+        "reimbursement_receivable": report["reimbursement_receivable"],
+        "customer_receivable": report["customer_receivable"],
         "month_value": f"{year:04d}-{month:02d}",
         "month_label": month_label,
         "month_is_current": month_is_current,

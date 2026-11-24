@@ -58,10 +58,10 @@
 
 <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-    <p class="text-xs text-slate-500">Received today</p><p class="text-xl font-bold text-green-600">{{ today_received|money }}</p>
+    <p class="text-xs text-slate-500">Cash received today</p><p class="text-xl font-bold text-green-600">{{ today_received|money }}</p>
   </div>
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-    <p class="text-xs text-slate-500">Spent today</p><p class="text-xl font-bold text-red-600">{{ today_spent|money }}</p>
+    <p class="text-xs text-slate-500">Cash paid out today</p><p class="text-xl font-bold text-red-600">{{ today_spent|money }}</p>
   </div>
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
     <p class="text-xs text-slate-500">Net today</p><p class="text-xl font-bold">{{ today_net|money }}</p>
@@ -71,12 +71,19 @@
   </div>
 </div>
 
+<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Business revenue · {{ month_label }}</p><p class="text-lg font-bold">{{ business_revenue|money }}</p><p class="text-xs text-slate-500">COGS {{ business_cogs|money }} · gross profit {{ business_gross_profit|money }}</p></div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Held for other people</p><p class="text-lg font-bold">{{ held_funds_liability|money }}</p><p class="text-xs text-slate-500">Liability, included in account balances but not income.</p></div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Agency &amp; customer receivables</p><p class="text-lg font-bold">{{ reimbursement_receivable|money }}</p><p class="text-xs text-slate-500">Reimbursements due · customer balances {{ customer_receivable|money }}</p></div>
+</div>
+
 <div class="flex flex-wrap gap-2 mb-6">
   <a href="{% url 'transactions:create' %}?kind=income" class="px-4 py-2 text-sm rounded-lg border border-green-300 text-green-700">+ Income</a>
   <a href="{% url 'transactions:create' %}?kind=expense" class="px-4 py-2 text-sm rounded-lg border border-red-300 text-red-700">+ Expense</a>
   <a href="{% url 'accounts:transfer_create' %}" class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Transfer</a>
   <a href="{% url 'debts:borrowing_create' %}" class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Borrow</a>
   <a href="{% url 'debts:lending_create' %}" class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Lend</a>
+  <a href="{% url 'accounting:hub' %}" class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">Agency &amp; Resale</a>
   <a href="{% url 'closing:today' %}" class="px-4 py-2 text-sm rounded-lg bg-brand-600 hover:bg-brand-700 text-white">Close Day</a>
   <a href="{% url 'reports:monthly' %}" class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">View Reports</a>
   <a href="{% url 'goals:list' %}" class="px-4 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600">My Goals</a>

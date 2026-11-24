@@ -20,6 +20,8 @@ def transaction_list(request):
         data = filter_form.cleaned_data
         if data.get("kind"):
             qs = qs.filter(kind=data["kind"])
+        if data.get("scope"):
+            qs = qs.filter(scope=data["scope"])
         if data.get("account"):
             qs = qs.filter(account=data["account"])
         if data.get("category"):
@@ -121,6 +123,7 @@ def template_use(request, pk):
             user=request.user,
             account=template.account,
             kind=template.kind,
+            scope=template.scope,
             category=template.category,
             amount=template.default_amount,
             fee_amount=0,

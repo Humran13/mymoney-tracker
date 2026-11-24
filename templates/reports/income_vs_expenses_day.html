@@ -13,10 +13,10 @@
 {% if detail %}
 <div class="grid sm:grid-cols-3 gap-4 mb-4">
   <div class="bg-green-50 border border-green-200 rounded-xl p-4">
-    <p class="text-xs text-green-700">Money received</p><p class="text-xl font-bold text-green-700">{{ detail.received|money }}</p>
+    <p class="text-xs text-green-700">Cash received</p><p class="text-xl font-bold text-green-700">{{ detail.received|money }}</p>
   </div>
   <div class="bg-red-50 border border-red-200 rounded-xl p-4">
-    <p class="text-xs text-red-700">Money spent</p><p class="text-xl font-bold text-red-700">{{ detail.spent|money }}</p>
+    <p class="text-xs text-red-700">Cash paid out</p><p class="text-xl font-bold text-red-700">{{ detail.spent|money }}</p>
   </div>
   <div class="rounded-xl p-4 border {% if detail.difference < 0 %}bg-red-50 border-red-200{% elif detail.difference > 0 %}bg-green-50 border-green-200{% else %}bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700{% endif %}">
     <p class="text-xs text-slate-500">Difference</p>
@@ -33,7 +33,7 @@
     {% empty %}<p class="text-sm text-slate-500">No categorized spending on this day.</p>{% endfor %}
   </div>
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
-    <h2 class="font-semibold mb-3">Spending by account</h2>
+    <h2 class="font-semibold mb-3">Cash paid out by account</h2>
     {% for name, total in detail.by_account %}
     <div class="flex justify-between text-sm py-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0"><span>{{ name }}</span><span>{{ total|money }}</span></div>
     {% empty %}<p class="text-sm text-slate-500">No money left any account on this day.</p>{% endfor %}
@@ -53,11 +53,11 @@
 
 <div class="grid lg:grid-cols-2 gap-6 mb-6">
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
-    <h2 class="font-semibold mb-3">Money received</h2>
+    <h2 class="font-semibold mb-3">Cash received</h2>
     {% for t in detail.income_transactions %}
     <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
       <div class="flex justify-between gap-2"><span class="min-w-0 break-words">{{ t.description|default:"Income" }}{% if t.category %} · {{ t.category.name }}{% endif %}</span><span class="whitespace-nowrap text-green-700">{{ t.amount|money }}</span></div>
-      <p class="text-xs text-slate-500">{{ t.account.name }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }}{% endif %}</p>
+      <p class="text-xs text-slate-500">{{ t.account.name }} · {{ t.get_scope_display }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }}{% endif %}</p>
     </div>
     {% endfor %}
     {% for b in detail.borrowings_received %}
@@ -78,11 +78,11 @@
   </div>
 
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
-    <h2 class="font-semibold mb-3">Money spent</h2>
+    <h2 class="font-semibold mb-3">Cash paid out</h2>
     {% for t in detail.expense_transactions %}
     <div class="py-1.5 border-b border-slate-100 dark:border-slate-700/50 last:border-0 text-sm">
       <div class="flex justify-between gap-2"><span class="min-w-0 break-words">{{ t.description|default:"Expense" }}{% if t.category %} · {{ t.category.name }}{% endif %}</span><span class="whitespace-nowrap text-red-700">{{ t.amount|money }}</span></div>
-      <p class="text-xs text-slate-500">{{ t.account.name }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }} · cash out {{ t.cash_out|money }}{% endif %}</p>
+      <p class="text-xs text-slate-500">{{ t.account.name }} · {{ t.get_scope_display }}{% if t.fee_amount %} · fee {{ t.fee_amount|money }} · cash out {{ t.cash_out|money }}{% endif %}</p>
     </div>
     {% endfor %}
     {% for r in detail.repayments %}
@@ -98,10 +98,22 @@
     </div>
     {% endfor %}
     {% if not detail.expense_transactions and not detail.repayments and not detail.lendings_sent %}
-    <p class="text-sm text-slate-500">No money was spent on this day.</p>
+    <p class="text-sm text-slate-500">No cash was paid out on this day.</p>
     {% endif %}
   </div>
 </div>
+
+{% if detail.held_entries or detail.reimbursement_claims or detail.reimbursement_payments or detail.inventory_lots or detail.inventory_sales or detail.sale_payments %}
+<div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 mb-6">
+  <h2 class="font-semibold mb-3">Agency &amp; resale activity</h2>
+  {% for e in detail.held_entries %}<div class="text-sm py-1">{{ e.get_kind_display }} for {{ e.fund.owner_name }} · {{ e.amount|money }} <span class="text-slate-500">(not personal income/expense)</span></div>{% endfor %}
+  {% for c in detail.reimbursement_claims %}<div class="text-sm py-1">Reimbursable purchase for {{ c.responsible_party }} · {{ c.purchase_amount|money }}</div>{% endfor %}
+  {% for p in detail.reimbursement_payments %}<div class="text-sm py-1">Reimbursement from {{ p.claim.responsible_party }} · {{ p.amount|money }}</div>{% endfor %}
+  {% for l in detail.inventory_lots %}<div class="text-sm py-1">Inventory purchased: {{ l.product_name }} · {{ l.landed_cost|money }}</div>{% endfor %}
+  {% for s in detail.inventory_sales %}<div class="text-sm py-1">Sale recognized: {{ s.lot.product_name }} · revenue {{ s.sale_amount|money }}, COGS {{ s.cost_of_goods_sold|money }}</div>{% endfor %}
+  {% for p in detail.sale_payments %}<div class="text-sm py-1">Customer payment: {{ p.sale.lot.product_name }} · {{ p.amount|money }}</div>{% endfor %}
+</div>
+{% endif %}
 
 {% if detail.transfers %}
 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">

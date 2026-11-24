@@ -1,0 +1,16 @@
+{% extends "base/base.html" %}
+{% block title %}{{ title }} · {{ APP_NAME }}{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <a href="{{ cancel_url }}" class="text-sm text-slate-500">&larr; Back</a>
+  <h1 class="text-xl font-semibold mt-3 mb-4">{{ title }}</h1>
+  <form method="post" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+    {% csrf_token %}
+    {% for field in form %}{% include "base/_field.html" with field=field %}{% endfor %}
+    <div class="flex flex-wrap gap-2">
+      <button id="submit-btn" class="px-4 py-2 rounded-lg bg-brand-600 text-white">Save</button>
+      <a href="{{ cancel_url }}" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -55,7 +55,7 @@ def test_analysis_page_period_filter_and_drilldown(signed_in_page, live_server):
 
     page.goto(live_server.url + "/reports/income-vs-expenses/")
     page.wait_for_load_state("networkidle")
-    assert "You spent 35,000.00 more than you received." in page.inner_text("body")
+    assert "Cash paid out was 35,000.00 more than cash received." in page.inner_text("body")
 
     # Switch to a 7-day window: the daily table appears with a drill-down link.
     page.select_option("#preset", "7d")

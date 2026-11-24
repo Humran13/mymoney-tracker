@@ -113,6 +113,14 @@ class AccountPosting(TimeStampedModel):
         LEND_REPAY = "lend_repay", "Loan Repayment Received"
         BILL_PAYMENT = "bill_payment", "Bill Payment"
         ADJUSTMENT = "adjustment", "Manual Adjustment"
+        HELD_RECEIVE = "held_receive", "Funds Held Received"
+        HELD_DISTRIBUTE = "held_distribute", "Funds Held Distributed"
+        HELD_OWNER_FEE = "held_owner_fee", "Funds Owner Fee"
+        REIMBURSE_BUY = "reimburse_buy", "Reimbursable Purchase"
+        REIMBURSE_IN = "reimburse_in", "Reimbursement Received"
+        INVENTORY_BUY = "inventory_buy", "Inventory Purchase"
+        SALE_RECEIVE = "sale_receive", "Sale Payment Received"
+        BUSINESS_FEE = "business_fee", "Business Fee"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="postings")
     account = models.ForeignKey(FinancialAccount, on_delete=models.CASCADE, related_name="postings")

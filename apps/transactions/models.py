@@ -35,8 +35,13 @@ class Transaction(UserOwnedModel):
         INCOME = "income", "Income"
         EXPENSE = "expense", "Expense"
 
+    class Scope(models.TextChoices):
+        PERSONAL = "personal", "Personal"
+        BUSINESS = "business", "Business"
+
     account = models.ForeignKey("accounts.FinancialAccount", on_delete=models.PROTECT, related_name="transactions")
     kind = models.CharField(max_length=10, choices=Kind.choices)
+    scope = models.CharField(max_length=10, choices=Scope.choices, default=Scope.PERSONAL)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="transactions")
     amount = money_field()
     fee_amount = money_field(default=0)
@@ -59,6 +64,7 @@ class Transaction(UserOwnedModel):
 class TransactionTemplate(UserOwnedModel):
     name = models.CharField(max_length=100)
     kind = models.CharField(max_length=10, choices=Transaction.Kind.choices)
+    scope = models.CharField(max_length=10, choices=Transaction.Scope.choices, default=Transaction.Scope.PERSONAL)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     account = models.ForeignKey("accounts.FinancialAccount", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     default_amount = money_field(null=True, blank=True)

@@ -27,7 +27,8 @@ class Budget(UserOwnedModel):
 
         next_month = self.month + relativedelta(months=1)
         totals = Transaction.objects.filter(
-            user=self.user, category=self.category, kind="expense", date__gte=self.month, date__lt=next_month
+            user=self.user, category=self.category, kind="expense", scope=Transaction.Scope.PERSONAL,
+            date__gte=self.month, date__lt=next_month
         ).aggregate(amount=Sum("amount"), fee=Sum("fee_amount"))
         return (totals["amount"] or Decimal("0.00")) + (totals["fee"] or Decimal("0.00"))
 

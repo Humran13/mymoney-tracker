@@ -10,26 +10,28 @@
   </div>
 </div>
 
-<form method="get" class="grid sm:grid-cols-6 gap-2 mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+<form method="get" class="grid sm:grid-cols-7 gap-2 mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
   {{ filter_form.kind }}
+  {{ filter_form.scope }}
   {{ filter_form.account }}
   {{ filter_form.category }}
   {{ filter_form.date_from }}
   {{ filter_form.date_to }}
   {{ filter_form.q }}
-  <button class="sm:col-span-6 justify-self-start px-4 py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-700">Filter</button>
+  <button class="sm:col-span-7 justify-self-start px-4 py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-700">Filter</button>
 </form>
 
 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto">
   <table class="w-full text-sm">
     <thead class="text-left text-slate-500 border-b border-slate-200 dark:border-slate-700">
-      <tr><th class="p-3">Date</th><th class="p-3">Description</th><th class="p-3">Category</th><th class="p-3">Account</th><th class="p-3">Amount</th><th class="p-3">Fee</th><th class="p-3"></th></tr>
+      <tr><th class="p-3">Date</th><th class="p-3">Description</th><th class="p-3">Purpose</th><th class="p-3">Category</th><th class="p-3">Account</th><th class="p-3">Amount</th><th class="p-3">Fee</th><th class="p-3"></th></tr>
     </thead>
     <tbody>
       {% for txn in page %}
       <tr class="border-b border-slate-100 dark:border-slate-700/50">
         <td class="p-3 whitespace-nowrap">{{ txn.date }}</td>
         <td class="p-3">{{ txn.description|default:"—" }}</td>
+        <td class="p-3">{{ txn.get_scope_display }}</td>
         <td class="p-3">{{ txn.category.name|default:"—" }}</td>
         <td class="p-3">{{ txn.account.name }}</td>
         <td class="p-3 font-medium {% if txn.kind == 'income' %}text-green-600{% else %}text-red-600{% endif %}">
@@ -42,7 +44,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td class="p-6 text-slate-500" colspan="7">No transactions match these filters.</td></tr>
+      <tr><td class="p-6 text-slate-500" colspan="8">No transactions match these filters.</td></tr>
       {% endfor %}
     </tbody>
   </table>
