@@ -21,6 +21,13 @@ router.register("budgets", views.BudgetViewSet, basename="budget")
 router.register("daily-closings", views.DailyClosingViewSet, basename="daily-closing")
 router.register("goals", views.SavingsGoalViewSet, basename="goal")
 router.register("goal-allocations", views.GoalAllocationViewSet, basename="goal-allocation")
+router.register("held-funds", views.HeldFundViewSet, basename="held-fund")
+router.register("held-fund-entries", views.HeldFundEntryViewSet, basename="held-fund-entry")
+router.register("reimbursements", views.ReimbursementClaimViewSet, basename="reimbursement")
+router.register("reimbursement-payments", views.ReimbursementPaymentViewSet, basename="reimbursement-payment")
+router.register("inventory-lots", views.InventoryLotViewSet, basename="inventory-lot")
+router.register("inventory-sales", views.InventorySaleViewSet, basename="inventory-sale")
+router.register("inventory-sale-payments", views.InventorySalePaymentViewSet, basename="inventory-sale-payment")
 
 urlpatterns = [
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),

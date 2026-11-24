@@ -103,14 +103,14 @@ class CashFlowTotalsTests(TestCase):
         self.assertEqual(cash["received"], Decimal("150000.00"))
         self.assertEqual(cash["spent"], Decimal("185000.00"))
         self.assertEqual(cash["difference"], Decimal("-35000.00"))
-        self.assertEqual(cash["message"], "You spent 35,000.00 more than you received.")
+        self.assertEqual(cash["message"], "Cash paid out was 35,000.00 more than cash received.")
 
     def test_surplus_message(self):
         self._txn("income", "200000.00")
         self._txn("expense", "150000.00")
         cash = cash_flow.period_cash_flow(self.user, TODAY, TODAY)
         self.assertEqual(cash["difference"], Decimal("50000.00"))
-        self.assertEqual(cash["message"], "You received 50,000.00 more than you spent.")
+        self.assertEqual(cash["message"], "Cash received was 50,000.00 more than cash paid out.")
 
     def test_equal_amounts_message(self):
         self._txn("income", "100000.00")
@@ -282,7 +282,7 @@ class DayDetailTests(TestCase):
 
 
 class DashboardTodayTotalsTests(TestCase):
-    """The dashboard's "Received today"/"Spent today" tiles and the Daily
+    """The dashboard's cash-received/cash-paid-out tiles and the Daily
     Closing page share `day_breakdown`; neither may count both legs of an
     internal transfer as real money in and out."""
 

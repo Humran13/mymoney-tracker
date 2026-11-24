@@ -15,6 +15,7 @@ urlpatterns = [
     path("budgets/", include("apps.budgets.urls")),
     path("goals/", include("apps.goals.urls")),
     path("reports/", include("apps.reports.urls")),
+    path("accounting/", include("apps.accounting.urls")),
     path("feedback/", include("apps.feedback.urls")),
     path("oauth/", include("allauth.urls")),
     path("api/v1/", include("api.v1.urls")),

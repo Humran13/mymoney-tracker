@@ -40,7 +40,7 @@ class AnalysisPageTests(TestCase):
         self.assertContains(response, "Income vs Expenses Analysis")
         self.assertContains(response, "UGX 150,000")
         self.assertContains(response, "UGX 185,000")
-        self.assertContains(response, "You spent 35,000.00 more than you received.")
+        self.assertContains(response, "Cash paid out was 35,000.00 more than cash received.")
         self.assertEqual(response.context["period"]["preset"], "today")
 
     def test_page_requires_login(self):

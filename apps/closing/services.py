@@ -35,7 +35,7 @@ def balance_as_of(user, date):
 def day_breakdown(user, date):
     """Cash in / cash out for one day.
 
-    Internal transfers are deliberately excluded from `received`/`spent`:
+    Internal transfers are deliberately excluded from cash received/paid out:
     moving money between the user's own accounts doesn't make them any richer
     or poorer, and counting both legs would inflate both sides of the same
     figure (Phase 13, accounting rule 7). They remain in `by_type` and in the
@@ -45,11 +45,11 @@ def day_breakdown(user, date):
     postings = AccountPosting.objects.filter(user=user, occurred_on=date)
     totals = dict(postings.values_list("source_type").annotate(total=Sum("amount")))
     received = sum(
-        (v for k, v in totals.items() if k in (AccountPosting.SourceType.INCOME, AccountPosting.SourceType.BORROW_RECEIVE, AccountPosting.SourceType.LEND_REPAY)),
+        (v for k, v in totals.items() if k in (AccountPosting.SourceType.INCOME, AccountPosting.SourceType.BORROW_RECEIVE, AccountPosting.SourceType.LEND_REPAY, AccountPosting.SourceType.HELD_RECEIVE, AccountPosting.SourceType.REIMBURSE_IN, AccountPosting.SourceType.SALE_RECEIVE)),
         Decimal("0.00"),
     )
     spent = sum(
-        (-v for k, v in totals.items() if k in (AccountPosting.SourceType.EXPENSE, AccountPosting.SourceType.FEE, AccountPosting.SourceType.LEND_SEND, AccountPosting.SourceType.BORROW_REPAY, AccountPosting.SourceType.BILL_PAYMENT)),
+        (-v for k, v in totals.items() if k in (AccountPosting.SourceType.EXPENSE, AccountPosting.SourceType.FEE, AccountPosting.SourceType.LEND_SEND, AccountPosting.SourceType.BORROW_REPAY, AccountPosting.SourceType.BILL_PAYMENT, AccountPosting.SourceType.HELD_DISTRIBUTE, AccountPosting.SourceType.HELD_OWNER_FEE, AccountPosting.SourceType.REIMBURSE_BUY, AccountPosting.SourceType.INVENTORY_BUY, AccountPosting.SourceType.BUSINESS_FEE)),
         Decimal("0.00"),
     )
     opening_balance = balance_as_of(user, date - timedelta(days=1))

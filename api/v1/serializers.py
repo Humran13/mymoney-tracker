@@ -9,6 +9,7 @@ from apps.debts.models import Borrowing, BorrowingRepayment, Lending, LendingRep
 from apps.goals.models import GoalAllocation, SavingsGoal
 from apps.transactions.models import Category, Transaction, TransactionTemplate
 from apps.users.models import User, UserProfile, UserSettings
+from apps.accounting.models import HeldFund, HeldFundEntry, InventoryLot, InventorySale, InventorySalePayment, ReimbursementClaim, ReimbursementPayment
 
 
 class ScopedFieldsMixin:
@@ -394,3 +395,177 @@ class GoalAllocationSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data["user"] = self.context["request"].user
         return super().create(validated_data)
+
+
+class AccountingServiceSerializer(ScopedFieldsMixin, serializers.ModelSerializer):
+    operation_key = serializers.UUIDField(write_only=True, required=False)
+    create_service = None
+    update_service = None
+
+    def _call(self, service, **kwargs):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            return service(**kwargs)
+        except (DjangoValidationError, ValueError) as exc:
+            detail = exc.messages if hasattr(exc, "messages") else str(exc)
+            raise serializers.ValidationError(detail) from exc
+
+    def create(self, validated_data):
+        user = self.context["request"].user
+        return self._call(type(self).create_service, user=user, actor=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        user = self.context["request"].user
+        return self._call(type(self).update_service, instance=instance, user=user, actor=user, **validated_data)
+
+
+class HeldFundSerializer(AccountingServiceSerializer):
+    outstanding = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HeldFund
+        fields = ["id", "owner_name", "purpose", "notes", "outstanding", "operation_key"]
+        read_only_fields = ["id", "outstanding"]
+
+    def get_outstanding(self, obj):
+        return obj.outstanding()
+
+    def create(self, validated_data):
+        from apps.accounting.services import create_held_fund
+        user = self.context["request"].user
+        validated_data.pop("operation_key", None)
+        return self._call(create_held_fund, user=user, actor=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        from apps.accounting.services import update_held_fund
+        validated_data.pop("operation_key", None)
+        return self._call(update_held_fund, fund=instance, actor=self.context["request"].user, **validated_data)
+
+
+class HeldFundEntrySerializer(AccountingServiceSerializer):
+    scoped_fields = {"fund": lambda user: HeldFund.objects.filter(user=user), "account": _user_accounts}
+
+    class Meta:
+        model = HeldFundEntry
+        fields = ["id", "fund", "kind", "account", "amount", "fee_amount", "fee_bearer", "date", "description", "notes", "reversed_at", "operation_key"]
+        read_only_fields = ["id", "reversed_at"]
+
+    def create(self, validated_data):
+        from apps.accounting.services import save_held_entry
+        user = self.context["request"].user
+        return self._call(save_held_entry, user=user, actor=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        from apps.accounting.services import save_held_entry
+        user = self.context["request"].user
+        return self._call(save_held_entry, user=user, actor=user, instance=instance, **validated_data)
+
+
+class ReimbursementClaimSerializer(AccountingServiceSerializer):
+    scoped_fields = {"account": _user_accounts}
+    outstanding = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ReimbursementClaim
+        fields = ["id", "responsible_party", "account", "purchase_amount", "fee_amount", "fee_bearer", "purchase_date", "description", "receipt_reference", "notes", "outstanding", "reversed_at", "operation_key"]
+        read_only_fields = ["id", "outstanding", "reversed_at"]
+
+    def get_outstanding(self, obj):
+        return obj.outstanding()
+
+    def create(self, validated_data):
+        from apps.accounting.services import create_reimbursement
+        user = self.context["request"].user
+        return self._call(create_reimbursement, user=user, actor=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        from apps.accounting.services import update_reimbursement
+        return self._call(update_reimbursement, claim=instance, actor=self.context["request"].user, **validated_data)
+
+
+class ReimbursementPaymentSerializer(AccountingServiceSerializer):
+    scoped_fields = {"claim": lambda user: ReimbursementClaim.objects.filter(user=user, reversed_at__isnull=True), "account": _user_accounts}
+
+    class Meta:
+        model = ReimbursementPayment
+        fields = ["id", "claim", "account", "amount", "unrecovered_amount", "fee_amount", "fee_bearer", "date", "notes", "reversed_at", "operation_key"]
+        read_only_fields = ["id", "reversed_at"]
+
+    def create(self, validated_data):
+        from apps.accounting.services import save_reimbursement_payment
+        user = self.context["request"].user
+        return self._call(save_reimbursement_payment, user=user, actor=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        from apps.accounting.services import save_reimbursement_payment
+        user = self.context["request"].user
+        return self._call(save_reimbursement_payment, user=user, actor=user, instance=instance, **validated_data)
+
+
+class InventoryLotSerializer(AccountingServiceSerializer):
+    scoped_fields = {"account": _user_accounts}
+    landed_cost = serializers.ReadOnlyField()
+    unit_cost = serializers.ReadOnlyField()
+    quantity_remaining = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InventoryLot
+        fields = ["id", "product_name", "supplier", "source", "account", "acquisition_date", "quantity", "purchase_cost", "shipping_cost", "customs_cost", "transport_cost", "notes", "landed_cost", "unit_cost", "quantity_remaining", "reversed_at", "operation_key"]
+        read_only_fields = ["id", "landed_cost", "unit_cost", "quantity_remaining", "reversed_at"]
+
+    def get_quantity_remaining(self, obj):
+        return obj.quantity_remaining()
+
+    def create(self, validated_data):
+        from apps.accounting.services import save_inventory_lot
+        user = self.context["request"].user
+        return self._call(save_inventory_lot, user=user, actor=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        from apps.accounting.services import save_inventory_lot
+        user = self.context["request"].user
+        return self._call(save_inventory_lot, user=user, actor=user, instance=instance, **validated_data)
+
+
+class InventorySaleSerializer(AccountingServiceSerializer):
+    scoped_fields = {"lot": lambda user: InventoryLot.objects.filter(user=user, reversed_at__isnull=True)}
+    cost_of_goods_sold = serializers.ReadOnlyField()
+    gross_profit = serializers.ReadOnlyField()
+    outstanding = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InventorySale
+        fields = ["id", "lot", "customer", "sale_date", "quantity", "sale_amount", "notes", "cost_of_goods_sold", "gross_profit", "outstanding", "reversed_at", "operation_key"]
+        read_only_fields = ["id", "cost_of_goods_sold", "gross_profit", "outstanding", "reversed_at"]
+
+    def get_outstanding(self, obj):
+        return obj.outstanding()
+
+    def create(self, validated_data):
+        from apps.accounting.services import save_inventory_sale
+        user = self.context["request"].user
+        return self._call(save_inventory_sale, user=user, actor=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        from apps.accounting.services import save_inventory_sale
+        user = self.context["request"].user
+        return self._call(save_inventory_sale, user=user, actor=user, instance=instance, **validated_data)
+
+
+class InventorySalePaymentSerializer(AccountingServiceSerializer):
+    scoped_fields = {"sale": lambda user: InventorySale.objects.filter(user=user, reversed_at__isnull=True), "account": _user_accounts}
+
+    class Meta:
+        model = InventorySalePayment
+        fields = ["id", "sale", "account", "amount", "fee_amount", "date", "notes", "reversed_at", "operation_key"]
+        read_only_fields = ["id", "reversed_at"]
+
+    def create(self, validated_data):
+        from apps.accounting.services import save_sale_payment
+        user = self.context["request"].user
+        return self._call(save_sale_payment, user=user, actor=user, **validated_data)
+
+    def update(self, instance, validated_data):
+        from apps.accounting.services import save_sale_payment
+        user = self.context["request"].user
+        return self._call(save_sale_payment, user=user, actor=user, instance=instance, **validated_data)

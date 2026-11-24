@@ -2,9 +2,9 @@
 
 Two different questions, deliberately never mixed into one number:
 
-1. **Cash in vs cash out** — what actually moved in and out of the user's own
-   accounts on a day. This is what "Money received / Money spent" means on the
-   dashboard and in this report.
+1. **Cash received vs cash paid out** — what actually moved in and out of the
+   user's own accounts on a day. These labels deliberately avoid calling every
+   outflow an expense or every inflow income.
 2. **Income earned vs expenses incurred** — the accrual view from
    `compute_monthly_report` (a sale on credit is income when it happens, a
    purchase on credit is an expense when it happens, whether or not cash moved).
@@ -26,6 +26,8 @@ from django.utils import timezone
 from apps.accounts.models import AccountPosting, FinancialAccount, Transfer
 from apps.debts.models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
 from apps.transactions.models import Transaction
+from apps.accounting.models import HeldFundEntry, InventoryLot, InventorySale, InventorySalePayment, ReimbursementClaim, ReimbursementPayment
+from apps.accounting.reporting import period_summary
 
 ZERO = Decimal("0.00")
 
@@ -35,6 +37,9 @@ CASH_IN_TYPES = frozenset(
         AccountPosting.SourceType.INCOME,
         AccountPosting.SourceType.BORROW_RECEIVE,
         AccountPosting.SourceType.LEND_REPAY,
+        AccountPosting.SourceType.HELD_RECEIVE,
+        AccountPosting.SourceType.REIMBURSE_IN,
+        AccountPosting.SourceType.SALE_RECEIVE,
     }
 )
 
@@ -46,6 +51,11 @@ CASH_OUT_TYPES = frozenset(
         AccountPosting.SourceType.BORROW_REPAY,
         AccountPosting.SourceType.LEND_SEND,
         AccountPosting.SourceType.BILL_PAYMENT,
+        AccountPosting.SourceType.HELD_DISTRIBUTE,
+        AccountPosting.SourceType.HELD_OWNER_FEE,
+        AccountPosting.SourceType.REIMBURSE_BUY,
+        AccountPosting.SourceType.INVENTORY_BUY,
+        AccountPosting.SourceType.BUSINESS_FEE,
     }
 )
 
@@ -165,10 +175,10 @@ def describe_difference(received: Decimal, spent: Decimal) -> str:
     if received == 0 and spent == 0:
         return "No money was recorded in or out for this period."
     if difference < 0:
-        return f"You spent {abs(difference):,.2f} more than you received."
+        return f"Cash paid out was {abs(difference):,.2f} more than cash received."
     if difference > 0:
-        return f"You received {difference:,.2f} more than you spent."
-    return "Money received and money spent were exactly equal."
+        return f"Cash received was {difference:,.2f} more than cash paid out."
+    return "Cash received and cash paid out were exactly equal."
 
 
 def period_cash_flow(user, start, end) -> dict:
@@ -227,6 +237,12 @@ def period_cash_flow(user, start, end) -> dict:
         "lending_received_total": by_type.get(AccountPosting.SourceType.LEND_REPAY, ZERO),
         "income_total": by_type.get(AccountPosting.SourceType.INCOME, ZERO),
         "expense_total": -by_type.get(AccountPosting.SourceType.EXPENSE, ZERO),
+        "held_received_total": by_type.get(AccountPosting.SourceType.HELD_RECEIVE, ZERO),
+        "held_distributed_total": -by_type.get(AccountPosting.SourceType.HELD_DISTRIBUTE, ZERO),
+        "reimbursement_received_total": by_type.get(AccountPosting.SourceType.REIMBURSE_IN, ZERO),
+        "reimbursable_purchase_total": -by_type.get(AccountPosting.SourceType.REIMBURSE_BUY, ZERO),
+        "inventory_purchase_total": -by_type.get(AccountPosting.SourceType.INVENTORY_BUY, ZERO),
+        "sale_receipt_total": by_type.get(AccountPosting.SourceType.SALE_RECEIVE, ZERO),
     }
 
 
@@ -283,12 +299,15 @@ def accrual_summary(user, start, end) -> dict:
         or ZERO
     )
     expenses = expense_principal + txn_fees + repayment_fees
+    agency = period_summary(user, start, end)
+    expenses += agency["additional_personal_expenses"]
     return {
         "income": income,
         "expenses": expenses,
         "difference": income - expenses,
         "transaction_fees": txn_fees,
         "repayment_fees": repayment_fees,
+        **agency,
     }
 
 
@@ -335,6 +354,12 @@ def day_detail(user, day) -> dict:
         if _in_window(r.receiving_account, day)
     ]
     transfers = list(Transfer.objects.filter(user=user, occurred_on=day).select_related("from_account", "to_account"))
+    held_entries = list(HeldFundEntry.objects.filter(user=user, date=day, reversed_at__isnull=True).select_related("fund", "account"))
+    reimbursement_claims = list(ReimbursementClaim.objects.filter(user=user, purchase_date=day, reversed_at__isnull=True).select_related("account"))
+    reimbursement_payments = list(ReimbursementPayment.objects.filter(user=user, date=day, reversed_at__isnull=True).select_related("claim", "account"))
+    inventory_lots = list(InventoryLot.objects.filter(user=user, acquisition_date=day, reversed_at__isnull=True).select_related("account"))
+    inventory_sales = list(InventorySale.objects.filter(user=user, sale_date=day, reversed_at__isnull=True).select_related("lot"))
+    sale_payments = list(InventorySalePayment.objects.filter(user=user, date=day, reversed_at__isnull=True).select_related("sale__lot", "account"))
 
     by_category = {}
     for txn in transactions:
@@ -376,6 +401,12 @@ def day_detail(user, day) -> dict:
         "lendings_sent": lendings_sent,
         "lending_repayments": lending_repayments,
         "transfers": transfers,
+        "held_entries": held_entries,
+        "reimbursement_claims": reimbursement_claims,
+        "reimbursement_payments": reimbursement_payments,
+        "inventory_lots": inventory_lots,
+        "inventory_sales": inventory_sales,
+        "sale_payments": sale_payments,
         "by_category": sorted(by_category.items(), key=lambda item: item[1], reverse=True),
         "by_account": sorted(by_account.items(), key=lambda item: item[1], reverse=True),
         "fee_lines": fee_lines,

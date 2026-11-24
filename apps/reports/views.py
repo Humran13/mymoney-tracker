@@ -74,6 +74,9 @@ def monthly_report_csv(request):
         "money_borrowed", "money_lent", "loan_repayments_paid", "loan_repayments_received",
         "opening_outstanding_debts", "closing_outstanding_debts",
         "opening_outstanding_receivables", "closing_outstanding_receivables", "savings_contributions",
+        "business_revenue", "cost_of_goods_sold", "business_operating_expenses", "business_gross_profit",
+        "held_received", "held_distributed", "held_funds_liability", "reimbursable_purchases",
+        "reimbursements_received", "reimbursement_receivable", "customer_receivable",
     ]:
         value = report[key]
         # A balance before an account's starting date is genuinely unknown
@@ -113,9 +116,15 @@ def monthly_report_pdf(request):
         return "not available" if value is None else f"{value:,.2f}"
 
     summary_rows = [
-        ["Total income", money(report["total_income"])],
-        ["Total expenses", money(report["total_expenses"])],
-        ["Net", money(report["net"])],
+        ["Personal income", money(report["total_income"])],
+        ["Personal expenses", money(report["total_expenses"])],
+        ["Personal net", money(report["net"])],
+        ["Business revenue", money(report["business_revenue"])],
+        ["Cost of goods sold", money(report["cost_of_goods_sold"])],
+        ["Business gross profit", money(report["business_gross_profit"])],
+        ["Held-funds liability", money(report["held_funds_liability"])],
+        ["Reimbursements receivable", money(report["reimbursement_receivable"])],
+        ["Customer receivable", money(report["customer_receivable"])],
         ["Mobile money fees", money(report["mobile_money_fees"])],
         ["Opening balance", money(report["opening_balance"])],
         ["Closing balance", money(report["closing_balance"])],

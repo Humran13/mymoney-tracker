@@ -12,6 +12,7 @@ from apps.debts import services as debt_services
 from apps.debts.models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
 from apps.goals.models import GoalAllocation, SavingsGoal
 from apps.transactions.models import Category, Transaction, TransactionTemplate
+from apps.accounting.models import HeldFund, HeldFundEntry, InventoryLot, InventorySale, InventorySalePayment, ReimbursementClaim, ReimbursementPayment
 
 from . import serializers
 
@@ -148,6 +149,67 @@ class GoalAllocationViewSet(UserOwnedQuerysetMixin, viewsets.ModelViewSet):
     queryset = GoalAllocation.objects.all()
     serializer_class = serializers.GoalAllocationSerializer
     filterset_fields = ["goal"]
+
+
+class ReverseOnDeleteMixin:
+    def perform_destroy(self, instance):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from rest_framework.exceptions import ValidationError
+        from apps.accounting.services import reverse
+        try:
+            reverse(instance, actor=self.request.user, reason="Reversed through API")
+        except DjangoValidationError as exc:
+            raise ValidationError(exc.messages) from exc
+
+
+class AccountingOwnedMixin(UserOwnedQuerysetMixin):
+    """Accounting serializers own their atomic service write, including user assignment."""
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+
+class HeldFundViewSet(AccountingOwnedMixin, viewsets.ModelViewSet):
+    queryset = HeldFund.objects.all()
+    serializer_class = serializers.HeldFundSerializer
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import ValidationError
+        raise ValidationError("Held-funds owners are retained for audit history; reverse individual movements instead.")
+
+
+class HeldFundEntryViewSet(ReverseOnDeleteMixin, AccountingOwnedMixin, viewsets.ModelViewSet):
+    queryset = HeldFundEntry.objects.all()
+    serializer_class = serializers.HeldFundEntrySerializer
+    filterset_fields = ["fund", "kind"]
+
+
+class ReimbursementClaimViewSet(ReverseOnDeleteMixin, AccountingOwnedMixin, viewsets.ModelViewSet):
+    queryset = ReimbursementClaim.objects.all()
+    serializer_class = serializers.ReimbursementClaimSerializer
+
+
+class ReimbursementPaymentViewSet(ReverseOnDeleteMixin, AccountingOwnedMixin, viewsets.ModelViewSet):
+    queryset = ReimbursementPayment.objects.all()
+    serializer_class = serializers.ReimbursementPaymentSerializer
+    filterset_fields = ["claim"]
+
+
+class InventoryLotViewSet(ReverseOnDeleteMixin, AccountingOwnedMixin, viewsets.ModelViewSet):
+    queryset = InventoryLot.objects.all()
+    serializer_class = serializers.InventoryLotSerializer
+
+
+class InventorySaleViewSet(ReverseOnDeleteMixin, AccountingOwnedMixin, viewsets.ModelViewSet):
+    queryset = InventorySale.objects.all()
+    serializer_class = serializers.InventorySaleSerializer
+    filterset_fields = ["lot"]
+
+
+class InventorySalePaymentViewSet(ReverseOnDeleteMixin, AccountingOwnedMixin, viewsets.ModelViewSet):
+    queryset = InventorySalePayment.objects.all()
+    serializer_class = serializers.InventorySalePaymentSerializer
+    filterset_fields = ["sale"]
 
 
 class GoalForecastView(APIView):

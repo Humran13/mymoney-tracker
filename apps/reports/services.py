@@ -8,6 +8,7 @@ from apps.closing.services import balance_as_of
 from apps.debts.models import Borrowing, BorrowingRepayment, Lending, LendingRepayment
 from apps.goals.models import GoalAllocation
 from apps.transactions.models import Transaction
+from apps.accounting.reporting import period_summary, position_summary
 
 
 def month_bounds(year, month):
@@ -97,6 +98,9 @@ def compute_monthly_report(user, year, month):
     # purchase already counted), so counting it as an expense too would
     # double-count the same money (accounting rule 10).
     expense_total = expense_principal + fee_total + borrowing_repayment_fees
+    agency = period_summary(user, start, end)
+    expense_total += agency["additional_personal_expenses"]
+    position = position_summary(user, end)
 
     opening_outstanding_debts = sum(
         (outstanding_borrowing_as_of(b, prev_month_end) for b in Borrowing.objects.filter(user=user, date_borrowed__lte=prev_month_end)),
@@ -148,4 +152,6 @@ def compute_monthly_report(user, year, month):
         "closing_outstanding_receivables": closing_outstanding_receivables,
         "budgets": budgets,
         "savings_contributions": savings_contributions,
+        **agency,
+        **position,
     }
