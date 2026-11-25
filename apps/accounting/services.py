@@ -304,6 +304,16 @@ def save_inventory_lot(*, user, actor=None, instance=None, **fields):
     if instance:
         lot = InventoryLot.objects.select_for_update().get(pk=instance.pk, user=user, reversed_at__isnull=True)
         before = _snapshot(lot)
+        immutable_after_sale = (
+            "quantity", "purchase_cost", "shipping_cost", "customs_cost", "transport_cost", "other_cost",
+        )
+        if lot.sales.filter(reversed_at__isnull=True).exists() and any(
+            key in fields and fields[key] != getattr(lot, key) for key in immutable_after_sale
+        ):
+            raise ValidationError(
+                "Inventory quantity and cost cannot be changed after a sale. "
+                "Reverse the sales first or record a separate correcting inventory lot."
+            )
         for key, value in fields.items():
             setattr(lot, key, value)
         if lot.quantity < lot.quantity_sold():

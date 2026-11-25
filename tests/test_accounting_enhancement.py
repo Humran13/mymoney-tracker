@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
@@ -67,7 +68,7 @@ class AccountingEnhancementTests(TestCase):
         self.assertEqual(HeldFundEntry.objects.count(), 1)
         self.assertEqual(AccountPosting.objects.filter(source_type="held_receive").count(), 1)
 
-    def test_realized_cogs_is_stable_when_unsold_inventory_is_revalued(self):
+    def test_cost_basis_is_locked_after_sale_and_realized_cogs_is_stable(self):
         lot = services.save_inventory_lot(
             user=self.user,
             product_name="Headsets",
@@ -95,27 +96,31 @@ class AccountingEnhancementTests(TestCase):
             notes="",
         )
         self.assertEqual(sale.cost_of_goods_sold, D("90000"))
-        services.save_inventory_lot(
-            user=self.user,
-            instance=lot,
-            product_name=lot.product_name,
-            supplier=lot.supplier,
-            source=lot.source,
-            account=self.account,
-            acquisition_date=TODAY,
-            quantity=D("2"),
-            purchase_cost=D("170000"),
-            shipping_cost=D("30000"),
-            customs_cost=0,
-            transport_cost=0,
-            other_cost=0,
-            invoice_reference="INV-1-CORRECTED",
-            notes="",
-        )
+        postings_before = list(AccountPosting.objects.order_by("pk").values("pk", "amount", "object_id"))
+        with self.assertRaisesMessage(ValidationError, "cannot be changed after a sale"):
+            services.save_inventory_lot(
+                user=self.user,
+                instance=lot,
+                product_name=lot.product_name,
+                supplier=lot.supplier,
+                source=lot.source,
+                account=self.account,
+                acquisition_date=TODAY,
+                quantity=D("2"),
+                purchase_cost=D("170000"),
+                shipping_cost=D("30000"),
+                customs_cost=0,
+                transport_cost=0,
+                other_cost=0,
+                invoice_reference="INV-1-CORRECTED",
+                notes="",
+            )
         sale.refresh_from_db()
         lot.refresh_from_db()
         self.assertEqual(sale.cost_of_goods_sold, D("90000"))
-        self.assertEqual(lot.remaining_value(), D("100000"))
+        self.assertEqual(lot.landed_cost, D("180000"))
+        self.assertEqual(lot.remaining_value(), D("90000"))
+        self.assertEqual(list(AccountPosting.objects.order_by("pk").values("pk", "amount", "object_id")), postings_before)
 
     def test_writeoff_status_and_business_loss_reporting_are_distinct(self):
         claim = services.create_reimbursement(
