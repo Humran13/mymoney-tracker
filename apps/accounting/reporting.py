@@ -25,11 +25,20 @@ def period_summary(user, start, end):
     personal_reimbursement_fees = _sum(claims.filter(fee_bearer=HeldFundEntry.FeeBearer.USER), "fee_amount")
     personal_reimbursement_fees += _sum(reimbursements.filter(fee_bearer=HeldFundEntry.FeeBearer.USER), "fee_amount")
     reimbursement_losses = _sum(reimbursements, "unrecovered_amount")
+    personal_reimbursement_losses = _sum(
+        reimbursements.filter(claim__writeoff_scope=ReimbursementClaim.WriteoffScope.PERSONAL),
+        "unrecovered_amount",
+    )
+    business_reimbursement_losses = reimbursement_losses - personal_reimbursement_losses
     business_revenue = sum((sale.sale_amount for sale in sales), ZERO)
     business_revenue += _sum(business_txns.filter(kind=Transaction.Kind.INCOME), "amount")
     cogs = sum((sale.cost_of_goods_sold for sale in sales), ZERO)
     business_fees = _sum(sale_payments, "fee_amount") + _sum(business_txns, "fee_amount")
-    business_operating = _sum(business_txns.filter(kind=Transaction.Kind.EXPENSE), "amount") + business_fees
+    business_operating = (
+        _sum(business_txns.filter(kind=Transaction.Kind.EXPENSE), "amount")
+        + business_fees
+        + business_reimbursement_losses
+    )
 
     return {
         "held_received": _sum(held.filter(kind=HeldFundEntry.Kind.RECEIPT), "amount"),
@@ -38,13 +47,19 @@ def period_summary(user, start, end):
         "reimbursable_purchases": _sum(claims, "purchase_amount"),
         "reimbursements_received": _sum(reimbursements, "amount"),
         "reimbursement_losses": reimbursement_losses,
+        "personal_reimbursement_losses": personal_reimbursement_losses,
+        "business_reimbursement_losses": business_reimbursement_losses,
         "inventory_purchases": sum((lot.landed_cost for lot in lots), ZERO),
+        "customer_payments_collected": _sum(sale_payments, "amount"),
         "business_revenue": business_revenue,
         "cost_of_goods_sold": cogs,
+        "business_fees": business_fees,
         "business_operating_expenses": business_operating,
         "business_gross_profit": business_revenue - cogs,
         "business_net_profit": business_revenue - cogs - business_operating,
-        "additional_personal_expenses": personal_agency_fees + personal_reimbursement_fees + reimbursement_losses,
+        "additional_personal_expenses": (
+            personal_agency_fees + personal_reimbursement_fees + personal_reimbursement_losses
+        ),
     }
 
 

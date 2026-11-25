@@ -1,8 +1,20 @@
+import pytest
 from django.utils import timezone
 
 from apps.accounting.models import HeldFund, InventoryLot, InventorySale, ReimbursementClaim
 
 from .conftest import submit_and_wait
+
+
+@pytest.mark.parametrize("width", [320, 375, 768, 1280])
+def test_accounting_hub_and_first_receipt_have_no_horizontal_overflow(signed_in_page, live_server, width):
+    page, _user, _account = signed_in_page
+    page.set_viewport_size({"width": width, "height": 900})
+    for path in ("/accounting/", "/accounting/held/receive/"):
+        page.goto(f"{live_server.url}{path}")
+        page.wait_for_load_state("networkidle")
+        scroll_width = page.evaluate("document.documentElement.scrollWidth")
+        assert scroll_width <= width + 2, f"horizontal overflow at {width}px on {path}: {scroll_width}"
 
 
 def test_agency_and_resale_workflows_are_usable_on_mobile(signed_in_page, live_server):

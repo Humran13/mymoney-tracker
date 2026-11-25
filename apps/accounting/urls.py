@@ -6,6 +6,7 @@ app_name = "accounting"
 
 urlpatterns = [
     path("", views.hub, name="hub"),
+    path("held/receive/", views.first_receipt, name="first_receipt"),
     path("held/new/", views.fund_create, name="fund_create"),
     path("held/<int:pk>/", views.fund_detail, name="fund_detail"),
     path("held/<int:pk>/edit/", views.fund_edit, name="fund_edit"),
@@ -25,4 +26,7 @@ urlpatterns = [
     path("sales/<int:pk>/payment/new/", views.sale_payment, name="sale_payment"),
     path("sales/<int:pk>/payment/<int:payment_pk>/edit/", views.sale_payment, name="sale_payment_edit"),
     path("reverse/<str:kind>/<int:pk>/", views.reverse_record, name="reverse"),
+    path("documents/<str:kind>/<int:pk>/add/", views.attachment_add, name="attachment_add"),
+    path("documents/<int:pk>/view/", views.attachment_download, name="attachment_download"),
+    path("documents/<int:pk>/delete/", views.attachment_delete, name="attachment_delete"),
 ]

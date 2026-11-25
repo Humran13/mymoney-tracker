@@ -1,0 +1,8 @@
+<section class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 mt-5">
+  <h2 class="font-semibold">Private supporting documents</h2>
+  <p class="text-xs text-slate-500 mb-3">Only you can download these files. Accepted: PDF, PNG, JPG and WebP, up to 10 MB.</p>
+  <form method="post" enctype="multipart/form-data" action="{% url 'accounting:attachment_add' attachment_kind target.pk %}" class="grid sm:grid-cols-3 gap-3 items-end">
+    {% csrf_token %}<label class="text-sm">{{ attachment_form.label.label }}{{ attachment_form.label }}</label><label class="text-sm">{{ attachment_form.document.label }}{{ attachment_form.document }}</label><button class="px-3 py-2 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-sm">Attach document</button>
+  </form>
+  <div class="mt-3 divide-y divide-slate-100 dark:divide-slate-700">{% for attachment in attachments %}<div class="flex flex-wrap justify-between gap-2 py-2 text-sm"><a class="text-brand-700" href="{% url 'accounting:attachment_download' attachment.pk %}">{{ attachment.label }}</a><form method="post" action="{% url 'accounting:attachment_delete' attachment.pk %}">{% csrf_token %}<button class="text-red-600">Delete</button></form></div>{% empty %}<p class="text-sm text-slate-500 py-2">No supporting documents attached.</p>{% endfor %}</div>
+</section>

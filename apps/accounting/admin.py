@@ -1,6 +1,15 @@
 from django.contrib import admin
 
-from .models import HeldFund, HeldFundEntry, InventoryLot, InventorySale, InventorySalePayment, ReimbursementClaim, ReimbursementPayment
+from .models import (
+    AccountingAttachment,
+    HeldFund,
+    HeldFundEntry,
+    InventoryLot,
+    InventorySale,
+    InventorySalePayment,
+    ReimbursementClaim,
+    ReimbursementPayment,
+)
 
 
 class FinancialHistoryAdmin(admin.ModelAdmin):
@@ -23,3 +32,4 @@ admin.site.register(ReimbursementPayment, FinancialHistoryAdmin)
 admin.site.register(InventoryLot, FinancialHistoryAdmin)
 admin.site.register(InventorySale, FinancialHistoryAdmin)
 admin.site.register(InventorySalePayment, FinancialHistoryAdmin)
+admin.site.register(AccountingAttachment, FinancialHistoryAdmin)
