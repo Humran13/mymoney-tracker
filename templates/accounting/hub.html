@@ -1,15 +1,59 @@
 {% extends "base/base.html" %}{% load money %}
 {% block title %}Agency & Resale · {{ APP_NAME }}{% endblock %}
 {% block content %}
-<div class="flex flex-wrap justify-between items-center gap-3 mb-5"><div><h1 class="text-xl font-semibold">Agency &amp; Resale</h1><p class="text-sm text-slate-500">Track money that is not personal income or spending.</p></div></div>
+<div class="flex flex-wrap justify-between items-start gap-3 mb-5">
+  <div><h1 class="text-xl font-semibold">Agency &amp; Resale</h1><p class="text-sm text-slate-500">Third-party money, reimbursements and resale inventory—kept separate from personal income and spending.</p></div>
+  <a href="{% url 'reports:monthly' %}" class="px-3 py-2 rounded-lg border text-sm">Monthly report</a>
+</div>
+
+<div class="flex flex-wrap gap-2 mb-5">
+  <a href="{% url 'accounting:first_receipt' %}" class="px-3 py-2 rounded-lg bg-brand-600 text-white text-sm">Receive money for someone</a>
+  <a href="#held-funds" class="px-3 py-2 rounded-lg border text-sm">Distribute money</a>
+  <a href="{% url 'accounting:fund_create' %}" class="px-3 py-2 rounded-lg border text-sm">Create empty fund</a>
+  <a href="{% url 'accounting:reimbursement_create' %}" class="px-3 py-2 rounded-lg border text-sm">Record reimbursable purchase</a>
+  <a href="#reimbursements" class="px-3 py-2 rounded-lg border text-sm">Record reimbursement</a>
+  <a href="{% url 'accounting:lot_create' %}" class="px-3 py-2 rounded-lg border text-sm">Purchase inventory</a>
+  <a href="#inventory" class="px-3 py-2 rounded-lg border text-sm">Record inventory sale</a>
+  <a href="#customer-balances" class="px-3 py-2 rounded-lg border text-sm">Record customer payment</a>
+</div>
+
+<form method="get" class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-5 grid sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+  <label class="text-sm lg:col-span-2">Search<input name="q" value="{{ query }}" placeholder="Owner, supplier, customer…" class="mt-1 w-full rounded-lg border-slate-300 dark:bg-slate-900"></label>
+  <label class="text-sm">Period start<input type="date" name="start" value="{{ period_start|date:'Y-m-d' }}" class="mt-1 w-full rounded-lg border-slate-300 dark:bg-slate-900"></label>
+  <label class="text-sm">Period end<input type="date" name="end" value="{{ period_end|date:'Y-m-d' }}" class="mt-1 w-full rounded-lg border-slate-300 dark:bg-slate-900"></label>
+  <label class="text-sm">Position as of<input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}" class="mt-1 w-full rounded-lg border-slate-300 dark:bg-slate-900"></label>
+  <label class="text-sm"><input type="checkbox" name="status" value="outstanding" {% if outstanding_only %}checked{% endif %}> Outstanding only</label>
+  <div class="flex gap-2"><button class="px-3 py-2 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-sm">Apply</button><a href="{% url 'accounting:hub' %}" class="px-3 py-2 rounded-lg border text-sm">Reset</a></div>
+</form>
+
 <div class="grid sm:grid-cols-3 gap-4 mb-6">
-  <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4"><p class="text-xs text-slate-500">Held for others</p><p class="text-xl font-bold">{{ held_total|money }}</p><p class="text-xs text-slate-500">Liability</p></div>
-  <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4"><p class="text-xs text-slate-500">Reimbursements due</p><p class="text-xl font-bold">{{ reimbursement_total|money }}</p><p class="text-xs text-slate-500">Receivable</p></div>
-  <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4"><p class="text-xs text-slate-500">Inventory on hand</p><p class="text-xl font-bold">{{ inventory_cost|money }}</p><p class="text-xs text-slate-500">Landed cost</p></div>
+  <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4"><p class="text-xs text-slate-500">Held for others · as of {{ as_of }}</p><p class="text-xl font-bold">{{ held_total|money }}</p><p class="text-xs text-slate-500">Liability, not income</p></div>
+  <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4"><p class="text-xs text-slate-500">Reimbursements due · as of {{ as_of }}</p><p class="text-xl font-bold">{{ reimbursement_total|money }}</p><p class="text-xs text-slate-500">Receivable</p></div>
+  <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4"><p class="text-xs text-slate-500">Inventory on hand · as of {{ as_of }}</p><p class="text-xl font-bold">{{ inventory_cost|money }}</p><p class="text-xs text-slate-500">Current landed cost</p></div>
 </div>
-<div class="grid lg:grid-cols-3 gap-5">
-  <section class="rounded-xl border border-slate-200 dark:border-slate-700 p-4"><div class="flex justify-between gap-2 mb-3"><h2 class="font-semibold">Funds held for others</h2><a href="{% url 'accounting:fund_create' %}" class="text-sm text-brand-700">+ New</a></div>{% for f in funds %}<a href="{% url 'accounting:fund_detail' f.pk %}" class="block py-2 border-b border-slate-100 dark:border-slate-700"><span class="block text-sm font-medium">{{ f.owner_name }}</span><span class="text-xs text-slate-500">Outstanding: {{ f.outstanding|money }}</span></a>{% empty %}<p class="text-sm text-slate-500">No third-party funds recorded.</p>{% endfor %}</section>
-  <section class="rounded-xl border border-slate-200 dark:border-slate-700 p-4"><div class="flex justify-between gap-2 mb-3"><h2 class="font-semibold">Reimbursable purchases</h2><a href="{% url 'accounting:reimbursement_create' %}" class="text-sm text-brand-700">+ New</a></div>{% for c in claims %}<a href="{% url 'accounting:reimbursement_detail' c.pk %}" class="block py-2 border-b border-slate-100 dark:border-slate-700"><span class="block text-sm font-medium">{{ c.description }}</span><span class="text-xs text-slate-500">{{ c.responsible_party }} · Due {{ c.outstanding|money }}</span></a>{% empty %}<p class="text-sm text-slate-500">No reimbursements due.</p>{% endfor %}</section>
-  <section class="rounded-xl border border-slate-200 dark:border-slate-700 p-4"><div class="flex justify-between gap-2 mb-3"><h2 class="font-semibold">Inventory for resale</h2><a href="{% url 'accounting:lot_create' %}" class="text-sm text-brand-700">+ Purchase</a></div>{% for l in lots %}<a href="{% url 'accounting:lot_detail' l.pk %}" class="block py-2 border-b border-slate-100 dark:border-slate-700"><span class="block text-sm font-medium">{{ l.product_name }}</span><span class="text-xs text-slate-500">{{ l.quantity_remaining }} remaining · {{ l.landed_cost|money }} landed</span></a>{% empty %}<p class="text-sm text-slate-500">No resale inventory recorded.</p>{% endfor %}</section>
+
+<div class="grid xl:grid-cols-3 gap-5">
+  <section id="held-funds" class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+    <div class="flex justify-between gap-2 mb-3"><div><h2 class="font-semibold">Funds held for others</h2><p class="text-xs text-slate-500">{{ period.held_received|money }} received · {{ period.held_distributed|money }} distributed in period</p></div><a href="{% url 'accounting:first_receipt' %}" class="text-sm text-brand-700">+ Receive</a></div>
+    {% for f in funds %}<a href="{% url 'accounting:fund_detail' f.pk %}" class="block py-2 border-b border-slate-100 dark:border-slate-700"><span class="block text-sm font-medium">{{ f.owner_name }}</span><span class="text-xs text-slate-500">Outstanding {{ f.outstanding|money }}{% if f.purpose %} · {{ f.purpose }}{% endif %}</span></a>{% empty %}<p class="text-sm text-slate-500">No matching third-party funds.</p>{% endfor %}
+    {% if recent_held %}<h3 class="text-xs uppercase tracking-wide text-slate-500 mt-4 mb-1">Recent movements</h3>{% for e in recent_held %}<a href="{% url 'accounting:fund_detail' e.fund_id %}" class="block text-sm py-1">{{ e.date }} · {{ e.get_kind_display }} · {{ e.amount|money }}</a>{% endfor %}{% endif %}
+    <p class="text-xs text-slate-500 mt-3">Moving these funds between your own accounts does not distribute them. <a href="{% url 'accounts:transfer_create' %}" class="text-brand-700">Record an internal transfer</a>, then distribute only when delivered to the beneficiary.</p>
+  </section>
+
+  <section id="reimbursements" class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+    <div class="flex justify-between gap-2 mb-3"><div><h2 class="font-semibold">Reimbursements</h2><p class="text-xs text-slate-500">{{ claim_counts.pending }} pending · {{ claim_counts.partial }} partial · {{ claim_counts.paid }} paid · {{ claim_counts.written_off }} written off</p></div><a href="{% url 'accounting:reimbursement_create' %}" class="text-sm text-brand-700">+ Purchase</a></div>
+    {% for c in claims %}<a href="{% url 'accounting:reimbursement_detail' c.pk %}" class="block py-2 border-b border-slate-100 dark:border-slate-700"><span class="block text-sm font-medium">{{ c.description }}</span><span class="text-xs text-slate-500">{{ c.responsible_party }} · {{ c.status_label }} · Due {{ c.outstanding|money }}</span></a>{% empty %}<p class="text-sm text-slate-500">No matching reimbursements.</p>{% endfor %}
+    {% if recent_payments %}<h3 class="text-xs uppercase tracking-wide text-slate-500 mt-4 mb-1">Recent repayments</h3>{% for p in recent_payments %}<a href="{% url 'accounting:reimbursement_detail' p.claim_id %}" class="block text-sm py-1">{{ p.date }} · {{ p.claim.responsible_party }} · {{ p.amount|money }}</a>{% endfor %}{% endif %}
+  </section>
+
+  <section id="inventory" class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+    <div class="flex justify-between gap-2 mb-3"><div><h2 class="font-semibold">Inventory &amp; resale</h2><p class="text-xs text-slate-500">Period revenue {{ period.business_revenue|money }} · COGS {{ period.cost_of_goods_sold|money }} · net {{ period.business_net_profit|money }}</p></div><a href="{% url 'accounting:lot_create' %}" class="text-sm text-brand-700">+ Purchase</a></div>
+    {% for l in lots %}<a href="{% url 'accounting:lot_detail' l.pk %}" class="block py-2 border-b border-slate-100 dark:border-slate-700"><span class="block text-sm font-medium">{{ l.product_name }}</span><span class="text-xs text-slate-500">{{ l.quantity_remaining }} remaining · {{ l.remaining_value|money }} value</span></a>{% empty %}<p class="text-sm text-slate-500">No matching resale inventory.</p>{% endfor %}
+    {% if recent_sales %}<h3 class="text-xs uppercase tracking-wide text-slate-500 mt-4 mb-1">Recent sales</h3>{% for s in recent_sales %}<a href="{% url 'accounting:sale_detail' s.pk %}" class="block text-sm py-1">{{ s.sale_date }} · {{ s.customer|default:"Customer" }} · {{ s.sale_amount|money }} · {{ s.payment_status }}</a>{% endfor %}{% endif %}
+  </section>
 </div>
+
+<section id="customer-balances" class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 mt-5"><h2 class="font-semibold mb-2">Customer balances</h2>{% if outstanding_sales %}<div class="grid md:grid-cols-2 xl:grid-cols-4 gap-2">{% for s in outstanding_sales %}<a href="{% url 'accounting:sale_detail' s.pk %}" class="rounded-lg bg-slate-50 dark:bg-slate-900 p-3 text-sm"><span class="block font-medium">{{ s.customer|default:"Unnamed customer" }}</span><span class="text-slate-500">{{ s.outstanding|money }} due · open to record payment</span></a>{% endfor %}</div>{% else %}<p class="text-sm text-slate-500">No customer payments are outstanding.</p>{% endif %}</section>
+
+<p class="text-xs text-slate-500 mt-5">Accounting workflows currently accept UGX accounts only. If cash moved in another currency, first record the documented UGX equivalent in a UGX account. Position cards use the selected “as of” date; activity metrics use the selected period.</p>
 {% endblock %}

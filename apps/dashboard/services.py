@@ -288,6 +288,7 @@ def compute_dashboard(user, month_param=None):
         "business_revenue": report["business_revenue"],
         "business_cogs": report["cost_of_goods_sold"],
         "business_gross_profit": report["business_gross_profit"],
+        "business_net_profit": report["business_net_profit"],
         "held_funds_liability": report["held_funds_liability"],
         "reimbursement_receivable": report["reimbursement_receivable"],
         "customer_receivable": report["customer_receivable"],

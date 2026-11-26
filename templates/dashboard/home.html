@@ -72,7 +72,7 @@
 </div>
 
 <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Business revenue · {{ month_label }}</p><p class="text-lg font-bold">{{ business_revenue|money }}</p><p class="text-xs text-slate-500">COGS {{ business_cogs|money }} · gross profit {{ business_gross_profit|money }}</p></div>
+  <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Business revenue · {{ month_label }}</p><p class="text-lg font-bold">{{ business_revenue|money }}</p><p class="text-xs text-slate-500">COGS {{ business_cogs|money }} · gross {{ business_gross_profit|money }} · net {{ business_net_profit|money }}</p></div>
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Held for other people</p><p class="text-lg font-bold">{{ held_funds_liability|money }}</p><p class="text-xs text-slate-500">Liability, included in account balances but not income.</p></div>
   <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4"><p class="text-xs text-slate-500">Agency &amp; customer receivables</p><p class="text-lg font-bold">{{ reimbursement_receivable|money }}</p><p class="text-xs text-slate-500">Reimbursements due · customer balances {{ customer_receivable|money }}</p></div>
 </div>

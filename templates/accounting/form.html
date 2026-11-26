@@ -4,13 +4,74 @@
 <div class="max-w-2xl mx-auto">
   <a href="{{ cancel_url }}" class="text-sm text-slate-500">&larr; Back</a>
   <h1 class="text-xl font-semibold mt-3 mb-4">{{ title }}</h1>
-  <form method="post" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+  {% if intro %}<p class="text-sm text-slate-600 dark:text-slate-300 mb-4">{{ intro }}</p>{% endif %}
+  <form method="post" enctype="multipart/form-data" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 sm:p-5" data-accounting-form>
     {% csrf_token %}
-    {% for field in form %}{% include "base/_field.html" with field=field %}{% endfor %}
-    <div class="flex flex-wrap gap-2">
-      <button id="submit-btn" class="px-4 py-2 rounded-lg bg-brand-600 text-white">Save</button>
+    {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+    {% for error in form.non_field_errors %}<p class="mb-3 text-sm text-red-600">{{ error }}</p>{% endfor %}
+    <div class="grid sm:grid-cols-2 gap-x-4">
+      {% for field in form.visible_fields %}{% include "base/_field.html" with field=field %}{% endfor %}
+    </div>
+    {% if projection_mode %}
+    <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-3 mb-4" data-projection data-base="{{ projection_base }}" data-mode="{{ projection_mode }}">
+      <p class="text-xs text-slate-500">Projected balance after saving</p>
+      <p class="font-semibold" data-projection-output>UGX {{ projection_base }}</p>
+    </div>
+    {% endif %}
+    {% if inventory_cost_calculator %}
+    <div class="rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 p-3 mb-4" data-inventory-cost>
+      <p class="text-xs text-slate-500">Estimated landed cost and unit cost</p>
+      <p class="font-semibold"><span data-landed-cost>UGX 0.00</span> total · <span data-unit-cost>UGX 0.00</span> per unit</p>
+      <p class="text-xs text-slate-500">Preview only; the saved backend calculation is authoritative.</p>
+    </div>
+    {% endif %}
+    <div class="flex flex-wrap gap-2 border-t border-slate-100 dark:border-slate-700 pt-4">
+      <button id="submit-btn" type="submit" class="px-4 py-2 rounded-lg bg-brand-600 text-white disabled:opacity-60">Save</button>
       <a href="{{ cancel_url }}" class="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600">Cancel</a>
     </div>
   </form>
 </div>
+{% if projection_mode %}
+<script>
+(() => {
+  const box = document.querySelector('[data-projection]');
+  const form = document.querySelector('[data-accounting-form]');
+  if (!box || !form) return;
+  const number = (name) => Number.parseFloat(form.elements[name]?.value || '0') || 0;
+  const update = () => {
+    const base = Number.parseFloat(box.dataset.base) || 0;
+    const amount = number('amount');
+    const writeoff = number('unrecovered_amount');
+    const ownerFee = form.elements.fee_bearer?.value === 'owner' ? number('fee_amount') : 0;
+    let projected = base;
+    if (box.dataset.mode === 'add') projected = base + amount - ownerFee;
+    if (box.dataset.mode === 'held') projected = base - amount - ownerFee;
+    if (box.dataset.mode === 'subtract') projected = base - amount;
+    if (box.dataset.mode === 'reimbursement') projected = base - amount - writeoff + ownerFee;
+    box.querySelector('[data-projection-output]').textContent = `UGX ${projected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+  };
+  form.addEventListener('input', update);
+  update();
+})();
+</script>
+{% endif %}
+{% if inventory_cost_calculator %}
+<script>
+(() => {
+  const box = document.querySelector('[data-inventory-cost]');
+  const form = document.querySelector('[data-accounting-form]');
+  if (!box || !form) return;
+  const number = (name) => Number.parseFloat(form.elements[name]?.value || '0') || 0;
+  const money = (value) => `UGX ${value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+  const update = () => {
+    const landed = ['purchase_cost', 'shipping_cost', 'customs_cost', 'transport_cost', 'other_cost'].reduce((total, name) => total + number(name), 0);
+    const quantity = number('quantity');
+    box.querySelector('[data-landed-cost]').textContent = money(landed);
+    box.querySelector('[data-unit-cost]').textContent = money(quantity > 0 ? landed / quantity : 0);
+  };
+  form.addEventListener('input', update);
+  update();
+})();
+</script>
+{% endif %}
 {% endblock %}

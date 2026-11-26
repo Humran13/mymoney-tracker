@@ -45,6 +45,11 @@ def _account_date(account, day, user=None):
         raise ValidationError("A valid account is required.")
     if user is not None and account.user_id != user.id:
         raise ValidationError("The account does not belong to this user.")
+    if account.currency_code != "UGX":
+        raise ValidationError(
+            "Agency, reimbursement, and resale records currently require a UGX account. "
+            "Enter an explicit UGX-equivalent amount in a UGX account; currencies are never converted silently."
+        )
     if day < balance_start_date(account):
         raise ValidationError("This date is before the account's opening-balance date.")
 
@@ -75,6 +80,29 @@ def _save(model, *, user, actor=None, **fields):
 @transaction.atomic
 def create_held_fund(*, user, actor=None, **fields):
     return _save(HeldFund, user=user, actor=actor, **fields)
+
+
+@transaction.atomic
+def create_held_fund_with_receipt(
+    *, user, actor=None, owner_name, purpose="", fund_notes="", operation_key=None, **entry_fields
+):
+    _claim_operation(user, operation_key, "held_fund_first_receipt")
+    fund = _save(
+        HeldFund,
+        user=user,
+        actor=actor,
+        owner_name=owner_name,
+        purpose=purpose,
+        notes=fund_notes,
+    )
+    entry = save_held_entry(
+        user=user,
+        actor=actor,
+        fund=fund,
+        kind=HeldFundEntry.Kind.RECEIPT,
+        **entry_fields,
+    )
+    return fund, entry
 
 
 @transaction.atomic
@@ -271,11 +299,24 @@ def save_inventory_lot(*, user, actor=None, instance=None, **fields):
     _account_date(account, day, user)
     for key in ("quantity", "purchase_cost"):
         _positive(fields.get(key, getattr(instance, key, None)), key.replace("_", " ").title())
-    for key in ("shipping_cost", "customs_cost", "transport_cost"):
+    for key in ("shipping_cost", "customs_cost", "transport_cost", "other_cost"):
         _nonnegative(fields.get(key, getattr(instance, key, ZERO)), key.replace("_", " ").title())
     if instance:
         lot = InventoryLot.objects.select_for_update().get(pk=instance.pk, user=user, reversed_at__isnull=True)
         before = _snapshot(lot)
+        immutable_after_sale = (
+            "quantity", "purchase_cost", "shipping_cost", "customs_cost", "transport_cost", "other_cost",
+        )
+        if lot.sales.filter(reversed_at__isnull=True).exists() and any(
+            key in fields and fields[key] != getattr(lot, key) for key in immutable_after_sale
+        ):
+            raise ValidationError(
+                "Inventory quantity and cost cannot be changed after a sale. "
+                "Reverse the sales first or record a separate correcting inventory lot."
+            )
+        earliest_sale = lot.sales.filter(reversed_at__isnull=True).order_by("sale_date").first()
+        if earliest_sale and day > earliest_sale.sale_date:
+            raise ValidationError("The purchase date cannot be later than a sale already recorded from this lot.")
         for key, value in fields.items():
             setattr(lot, key, value)
         if lot.quantity < lot.quantity_sold():
@@ -314,10 +355,14 @@ def save_inventory_sale(*, user, actor=None, instance=None, **fields):
         if sale.sale_amount - sale.amount_paid() < ZERO:
             raise ValidationError("Sale amount cannot be reduced below payments already received.")
     else:
-        sale = InventorySale(user=user, **fields)
+        sale = InventorySale(user=user, unit_cost_at_sale=lot.unit_cost, **fields)
         available = lot.quantity_remaining()
         before = None
     sale.lot = lot
+    if sale.unit_cost_at_sale is None:
+        sale.unit_cost_at_sale = lot.unit_cost
+    if sale.sale_date < lot.acquisition_date:
+        raise ValidationError("A sale cannot be dated before the inventory was purchased.")
     if available - sale.quantity < Decimal("0.000"):
         raise ValidationError("Sale quantity exceeds inventory currently available.")
     sale.full_clean()
@@ -392,3 +437,25 @@ def reverse(obj, *, actor, reason):
     delete_postings(locked)
     _audit(actor, "update", locked, f"Reversed {model._meta.verbose_name}", before)
     return locked
+
+
+@transaction.atomic
+def create_attachment(*, user, actor=None, target, label, document):
+    from .models import AccountingAttachment
+
+    attachment = AccountingAttachment(user=user, target=target, label=label, document=document)
+    attachment.full_clean()
+    attachment.save()
+    _audit(actor or user, "create", attachment, "Attached supporting accounting document")
+    return attachment
+
+
+@transaction.atomic
+def delete_attachment(attachment, *, actor):
+    from .models import AccountingAttachment
+
+    locked = AccountingAttachment.objects.select_for_update().get(pk=attachment.pk, user=actor)
+    stored_file = locked.document
+    _audit(actor, "delete", locked, "Removed supporting accounting document")
+    locked.delete()
+    transaction.on_commit(lambda: stored_file.delete(save=False))

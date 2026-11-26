@@ -36,6 +36,10 @@ def _user_accounts(user):
     return FinancialAccount.objects.filter(user=user)
 
 
+def _user_ugx_accounts(user):
+    return FinancialAccount.objects.filter(user=user, currency_code="UGX")
+
+
 def _user_or_global_categories(user):
     return Category.objects.filter(Q(user=user) | Q(user__isnull=True))
 
@@ -443,11 +447,14 @@ class HeldFundSerializer(AccountingServiceSerializer):
 
 
 class HeldFundEntrySerializer(AccountingServiceSerializer):
-    scoped_fields = {"fund": lambda user: HeldFund.objects.filter(user=user), "account": _user_accounts}
+    scoped_fields = {"fund": lambda user: HeldFund.objects.filter(user=user), "account": _user_ugx_accounts}
 
     class Meta:
         model = HeldFundEntry
-        fields = ["id", "fund", "kind", "account", "amount", "fee_amount", "fee_bearer", "date", "description", "notes", "reversed_at", "operation_key"]
+        fields = [
+            "id", "fund", "kind", "account", "amount", "fee_amount", "fee_bearer", "date",
+            "sender_name", "recipient_name", "reference", "description", "notes", "reversed_at", "operation_key",
+        ]
         read_only_fields = ["id", "reversed_at"]
 
     def create(self, validated_data):
@@ -462,13 +469,20 @@ class HeldFundEntrySerializer(AccountingServiceSerializer):
 
 
 class ReimbursementClaimSerializer(AccountingServiceSerializer):
-    scoped_fields = {"account": _user_accounts}
+    scoped_fields = {"account": _user_ugx_accounts}
     outstanding = serializers.SerializerMethodField()
 
     class Meta:
         model = ReimbursementClaim
-        fields = ["id", "responsible_party", "account", "purchase_amount", "fee_amount", "fee_bearer", "purchase_date", "description", "receipt_reference", "notes", "outstanding", "reversed_at", "operation_key"]
-        read_only_fields = ["id", "outstanding", "reversed_at"]
+        fields = [
+            "id", "responsible_party", "supplier", "account", "purchase_amount", "fee_amount",
+            "fee_bearer", "purchase_date", "description", "receipt_reference", "writeoff_scope", "notes",
+            "outstanding", "total_reimbursed", "total_written_off", "status", "status_label",
+            "reversed_at", "operation_key",
+        ]
+        read_only_fields = [
+            "id", "outstanding", "total_reimbursed", "total_written_off", "status", "status_label", "reversed_at",
+        ]
 
     def get_outstanding(self, obj):
         return obj.outstanding()
@@ -484,11 +498,11 @@ class ReimbursementClaimSerializer(AccountingServiceSerializer):
 
 
 class ReimbursementPaymentSerializer(AccountingServiceSerializer):
-    scoped_fields = {"claim": lambda user: ReimbursementClaim.objects.filter(user=user, reversed_at__isnull=True), "account": _user_accounts}
+    scoped_fields = {"claim": lambda user: ReimbursementClaim.objects.filter(user=user, reversed_at__isnull=True), "account": _user_ugx_accounts}
 
     class Meta:
         model = ReimbursementPayment
-        fields = ["id", "claim", "account", "amount", "unrecovered_amount", "fee_amount", "fee_bearer", "date", "notes", "reversed_at", "operation_key"]
+        fields = ["id", "claim", "account", "amount", "unrecovered_amount", "fee_amount", "fee_bearer", "date", "reference", "notes", "reversed_at", "operation_key"]
         read_only_fields = ["id", "reversed_at"]
 
     def create(self, validated_data):
@@ -503,18 +517,27 @@ class ReimbursementPaymentSerializer(AccountingServiceSerializer):
 
 
 class InventoryLotSerializer(AccountingServiceSerializer):
-    scoped_fields = {"account": _user_accounts}
+    scoped_fields = {"account": _user_ugx_accounts}
     landed_cost = serializers.ReadOnlyField()
     unit_cost = serializers.ReadOnlyField()
     quantity_remaining = serializers.SerializerMethodField()
+    remaining_value = serializers.SerializerMethodField()
 
     class Meta:
         model = InventoryLot
-        fields = ["id", "product_name", "supplier", "source", "account", "acquisition_date", "quantity", "purchase_cost", "shipping_cost", "customs_cost", "transport_cost", "notes", "landed_cost", "unit_cost", "quantity_remaining", "reversed_at", "operation_key"]
-        read_only_fields = ["id", "landed_cost", "unit_cost", "quantity_remaining", "reversed_at"]
+        fields = [
+            "id", "product_name", "supplier", "source", "account", "acquisition_date", "quantity",
+            "purchase_cost", "shipping_cost", "customs_cost", "transport_cost", "other_cost",
+            "invoice_reference", "notes", "landed_cost", "unit_cost", "quantity_remaining",
+            "remaining_value", "reversed_at", "operation_key",
+        ]
+        read_only_fields = ["id", "landed_cost", "unit_cost", "quantity_remaining", "remaining_value", "reversed_at"]
 
     def get_quantity_remaining(self, obj):
         return obj.quantity_remaining()
+
+    def get_remaining_value(self, obj):
+        return obj.remaining_value()
 
     def create(self, validated_data):
         from apps.accounting.services import save_inventory_lot
@@ -535,8 +558,14 @@ class InventorySaleSerializer(AccountingServiceSerializer):
 
     class Meta:
         model = InventorySale
-        fields = ["id", "lot", "customer", "sale_date", "quantity", "sale_amount", "notes", "cost_of_goods_sold", "gross_profit", "outstanding", "reversed_at", "operation_key"]
-        read_only_fields = ["id", "cost_of_goods_sold", "gross_profit", "outstanding", "reversed_at"]
+        fields = [
+            "id", "lot", "customer", "sale_date", "quantity", "sale_amount", "invoice_reference", "notes",
+            "unit_cost_at_sale", "cost_of_goods_sold", "gross_profit", "outstanding", "payment_status",
+            "reversed_at", "operation_key",
+        ]
+        read_only_fields = [
+            "id", "unit_cost_at_sale", "cost_of_goods_sold", "gross_profit", "outstanding", "payment_status", "reversed_at",
+        ]
 
     def get_outstanding(self, obj):
         return obj.outstanding()
@@ -553,11 +582,11 @@ class InventorySaleSerializer(AccountingServiceSerializer):
 
 
 class InventorySalePaymentSerializer(AccountingServiceSerializer):
-    scoped_fields = {"sale": lambda user: InventorySale.objects.filter(user=user, reversed_at__isnull=True), "account": _user_accounts}
+    scoped_fields = {"sale": lambda user: InventorySale.objects.filter(user=user, reversed_at__isnull=True), "account": _user_ugx_accounts}
 
     class Meta:
         model = InventorySalePayment
-        fields = ["id", "sale", "account", "amount", "fee_amount", "date", "notes", "reversed_at", "operation_key"]
+        fields = ["id", "sale", "account", "amount", "fee_amount", "date", "reference", "notes", "reversed_at", "operation_key"]
         read_only_fields = ["id", "reversed_at"]
 
     def create(self, validated_data):
