@@ -122,6 +122,22 @@ class AccountingEnhancementTests(TestCase):
         self.assertEqual(lot.remaining_value(), D("90000"))
         self.assertEqual(list(AccountPosting.objects.order_by("pk").values("pk", "amount", "object_id")), postings_before)
 
+    def test_sale_and_purchase_dates_must_stay_in_order(self):
+        lot = services.save_inventory_lot(
+            user=self.user, product_name="Cables", account=self.account, acquisition_date=TODAY,
+            quantity=D("10"), purchase_cost=D("100000"),
+        )
+        with self.assertRaises(ValidationError):
+            services.save_inventory_sale(
+                user=self.user, lot=lot, sale_date=TODAY - timezone.timedelta(days=1),
+                quantity=D("1"), sale_amount=D("20000"),
+            )
+        services.save_inventory_sale(user=self.user, lot=lot, sale_date=TODAY, quantity=D("1"), sale_amount=D("20000"))
+        with self.assertRaises(ValidationError):
+            services.save_inventory_lot(
+                user=self.user, instance=lot, acquisition_date=TODAY + timezone.timedelta(days=1),
+            )
+
     def test_writeoff_status_and_business_loss_reporting_are_distinct(self):
         claim = services.create_reimbursement(
             user=self.user,
